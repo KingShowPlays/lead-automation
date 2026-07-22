@@ -1,0 +1,46 @@
+# Local development stack: MongoDB + API + dashboard
+# Usage: docker compose up --build
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/yean_leads
+      PORT: 4000
+      API_KEY: ${API_KEY:-dev-key}
+      DASHBOARD_ORIGIN: http://localhost:3000
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_SENDER: ${GMAIL_SENDER:-}
+      ENABLE_SCHEDULER: "true"
+    ports:
+      - "4000:4000"
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_API_KEY: ${API_KEY:-dev-key}
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "3000:3000"
+
+volumes:
+  mongo-data:

@@ -1,0 +1,156 @@
+{
+  "name": "YEAN Lead Pipeline (daily)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every morning 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.YEAN_API_URL }}/api/pipeline/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.YEAN_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "run-pipeline",
+      "name": "Run discovery + processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.YEAN_API_URL }}/api/pipeline/follow-ups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.YEAN_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "run-followups",
+      "name": "Send due follow-ups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.YEAN_API_URL }}/api/stats",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.YEAN_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "id": "get-stats",
+      "name": "Fetch stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.totals.pendingApproval }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-queue",
+      "name": "New pitches waiting?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1040, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "msg",
+              "name": "message",
+              "type": "string",
+              "value": "=🎯 YEAN Leads: {{ $json.totals.pendingApproval }} pitch(es) waiting for your approval. Review them at your dashboard /queue."
+            }
+          ]
+        }
+      },
+      "id": "notify",
+      "name": "Build notification (connect Gmail/Telegram/Slack here)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1300, -80]
+    }
+  ],
+  "connections": {
+    "Every morning 07:00": {
+      "main": [[{ "node": "Run discovery + processing", "type": "main", "index": 0 }]]
+    },
+    "Run discovery + processing": {
+      "main": [[{ "node": "Send due follow-ups", "type": "main", "index": 0 }]]
+    },
+    "Send due follow-ups": {
+      "main": [[{ "node": "Fetch stats", "type": "main", "index": 0 }]]
+    },
+    "Fetch stats": {
+      "main": [[{ "node": "New pitches waiting?", "type": "main", "index": 0 }]]
+    },
+    "New pitches waiting?": {
+      "main": [
+        [{ "node": "Build notification (connect Gmail/Telegram/Slack here)", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
