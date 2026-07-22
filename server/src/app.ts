@@ -33,6 +33,13 @@ export function createApp(): Express {
     });
   });
 
+  // Defensive: some deploy setups end up checking "/" instead of "/health"
+  // (e.g. a platform default when no healthcheck path is configured). This
+  // costs nothing and means a misconfigured healthcheck path still passes.
+  app.get("/", (_req, res) => {
+    res.json({ ok: true, service: "yean-lead-automation" });
+  });
+
   app.use("/api", apiKeyAuth, requireDb);
   app.use("/api/leads", leadsRouter);
   app.use("/api/pipeline", pipelineRouter);

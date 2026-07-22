@@ -75,17 +75,25 @@ Railway exposes the connection string as `${{MongoDB.MONGO_URL}}` for other serv
 - Keep `DAILY_EMAIL_CAP` conservative to protect Gmail sender reputation.
 - MongoDB free/hobby tiers are plenty for tens of thousands of leads.
 
-## Dockerfiles in this repo, for reference
+## Config files in this repo, for reference
 
-| File | Builds | When it's used |
+| File | Applies to | When it's used |
 |---|---|---|
 | `Dockerfile` (root) | API (server) | Default. Any service pointed at the repo root with no Dockerfile Path. |
 | `Dockerfile.dashboard` (root) | Dashboard | Set as the dashboard service's Dockerfile Path. |
 | `Dockerfile.server` (root) | API (server) | Same as the root `Dockerfile`; use it if you'd rather be explicit. |
 | `server/Dockerfile` | API (server) | Only when the service Root Directory is `server`. |
 | `dashboard/Dockerfile` | Dashboard | Only when the service Root Directory is `dashboard`. |
+| `railway.json` (root) | Whichever service has no Root Directory | Sets `healthcheckPath: /health`; harmless either way since both apps answer that path. |
+| `server/railway.json`, `dashboard/railway.json` | Whichever service has that Root Directory | Same settings, scoped to that folder. |
 
 The root-level Dockerfiles copy in only their own folder, so the API build is never affected by the dashboard and vice versa.
+
+## A note on the healthcheck path
+
+There's also a root-level `railway.json` alongside `server/railway.json` and `dashboard/railway.json`, because Railway resolves config files the same way it resolves Dockerfiles: it looks at the repo root when a service has no Root Directory set, and inside the subfolder when one is set. With two services potentially both reading from the repo root, either could end up applying the other's `railway.json`.
+
+Rather than fight that resolution, both apps answer **GET /health with 200** (the API also answers GET / with 200, as a second fallback). So whichever healthcheck path a service ends up checking, it passes, regardless of which `railway.json` Railway picked for it. You still get to set the healthcheck path explicitly in Settings → Deploy if you want to be precise, but it isn't required for either service to come up healthy.
 
 ## Troubleshooting
 
@@ -93,6 +101,7 @@ The root-level Dockerfiles copy in only their own folder, so the API build is ne
 |---|---|
 | `could not locate the Dockerfile at path Dockerfile in code archive` | Railway looked for a `Dockerfile` at the repo root. There is now a root `Dockerfile` (it builds the API), so pull the latest `main` and redeploy. For the dashboard service, set Dockerfile Path to `Dockerfile.dashboard`. |
 | Dashboard deployed but shows the API JSON | The dashboard service is using the root `Dockerfile` (which builds the API). Set its Dockerfile Path to `Dockerfile.dashboard`. |
+| Healthcheck failing after a deploy | Both apps answer `GET /health` with 200 (the API also answers `GET /`), so this should no longer happen. If it does, check the deploy logs, most likely the container is crashing before it can bind to `PORT`, not an actual healthcheck path problem. |
 | Dashboard shows "Can't reach the API" | Check `NEXT_PUBLIC_API_URL` build arg + API `DASHBOARD_ORIGIN` (CORS) + `NEXT_PUBLIC_API_KEY` matches `API_KEY`. |
 | `/api/*` returns 401 | Dashboard's `NEXT_PUBLIC_API_KEY` differs from the server `API_KEY`. |
 | Discovery returns 503 | No discovery source configured. Add a Google Places key (and enable Places API New with billing), or enable manual import / the directory source. |

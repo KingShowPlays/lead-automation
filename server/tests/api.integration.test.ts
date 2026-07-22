@@ -74,6 +74,12 @@ describe("health & auth", () => {
     expect(res.body.db).toBe("connected");
   });
 
+  it("GET / also responds 200 without auth (defensive, in case a platform healthchecks the root path)", async () => {
+    const res = await request(app).get("/");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
   it("malformed JSON body returns 400, not 500", async () => {
     const res = await request(app)
       .put("/api/settings")
