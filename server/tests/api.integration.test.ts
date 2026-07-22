@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import request from "supertest";
@@ -13,19 +13,44 @@ import { getSettings } from "../src/models/Settings.js";
 import { processLead } from "../src/services/pipeline/runPipeline.js";
 import { runFollowUps } from "../src/services/outreach/followUp.js";
 
-let mongod: MongoMemoryServer;
+let mongod: MongoMemoryServer | null = null;
 let app: Express;
+let dbAvailable = true;
 
 beforeAll(async () => {
-  mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri("yean_test"));
-  await getSettings();
-  app = createApp();
+  // Prefer an externally provided MongoDB (real mongod or a wire-compatible
+  // server such as FerretDB) via TEST_MONGODB_URI; otherwise spin up an
+  // in-memory mongod. If neither is reachable (e.g. offline CI that can't
+  // download the mongod binary), the suite skips instead of failing.
+  try {
+    const externalUri = process.env.TEST_MONGODB_URI;
+    if (externalUri) {
+      await mongoose.connect(externalUri, { dbName: `yean_test_${Date.now()}` });
+    } else {
+      mongod = await MongoMemoryServer.create();
+      await mongoose.connect(mongod.getUri("yean_test"));
+    }
+    await Promise.all([Lead.deleteMany({}), Suppression.deleteMany({}), OutreachLog.deleteMany({})]);
+    await getSettings();
+    app = createApp();
+  } catch (err) {
+    dbAvailable = false;
+    // eslint-disable-next-line no-console
+    console.warn(
+      "\n[integration] No MongoDB available — skipping integration suite.\n" +
+        "Set TEST_MONGODB_URI to a MongoDB-compatible server to run it.\n" +
+        `Reason: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+  }
+});
+
+beforeEach((ctx) => {
+  if (!dbAvailable) ctx.skip();
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongod.stop();
+  if (dbAvailable) await mongoose.disconnect();
+  if (mongod) await mongod.stop();
 });
 
 function makeLead(overrides: Record<string, unknown> = {}) {

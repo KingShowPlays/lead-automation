@@ -118,6 +118,10 @@ function deadWebsiteReason(check: WebsiteCheckResult): string | null {
     return "Their domain now shows a parking page — the website is gone and the domain may be expiring.";
   }
   if (check.httpStatus != null) {
+    // Access-control / rate-limit statuses mean the site is UP but blocking our
+    // bot (very common on CDN-fronted sites). Treat as reachable-but-unknown, not
+    // dead — otherwise we'd manufacture false "broken website" leads.
+    if (ACCESS_CONTROLLED_STATUSES.has(check.httpStatus)) return null;
     if (check.httpStatus === 404 || check.httpStatus === 410) {
       return `Their website returns a ${check.httpStatus} error — the page customers land on no longer exists.`;
     }
@@ -133,6 +137,9 @@ function deadWebsiteReason(check: WebsiteCheckResult): string | null {
   }
   return null;
 }
+
+/** 401/403/405/407/408/429/451: site is up but access-restricted or blocking bots. */
+const ACCESS_CONTROLLED_STATUSES = new Set([401, 403, 405, 407, 408, 429, 451]);
 
 /** Builds the issues list for a live page. Pure — unit-testable. */
 export function collectQualityIssues(input: {

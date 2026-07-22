@@ -116,6 +116,22 @@ describe("classifyWebsite — the eight categories", () => {
       expect(r.websiteType).toBe("BROKEN_WEBSITE");
       expect(r.problemSummary).toMatch(/parking/i);
     });
+
+    it("400 bad request is treated as broken", () => {
+      const r = classifyWebsite(baseCheck({ httpStatus: 400 }));
+      expect(r.websiteType).toBe("BROKEN_WEBSITE");
+    });
+  });
+
+  describe("access-controlled statuses are NOT broken (site is up, blocking our bot)", () => {
+    for (const status of [401, 403, 405, 407, 408, 429, 451]) {
+      it(`HTTP ${status} → not BROKEN_WEBSITE`, () => {
+        // Reachable site (e.g. CDN-fronted) that returns an access-control code.
+        const r = classifyWebsite(baseCheck({ httpStatus: status, title: null, metaDescription: null }));
+        expect(r.websiteType).not.toBe("BROKEN_WEBSITE");
+        expect(r.websiteType).toBe("CUSTOM_WEBSITE");
+      });
+    }
   });
 
   it("SHOPIFY for live Shopify sites", () => {

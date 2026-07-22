@@ -11,7 +11,7 @@ export const statsRouter = Router();
 statsRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
-    const [byStage, byWebsiteType, byCity, byOutreach, totals, revenue, recentRuns, recentActivity] =
+    const [byStage, byWebsiteType, byCity, byOutreach, totals, revenue, convertedDealsCount, recentRuns, recentActivity] =
       await Promise.all([
         Lead.aggregate([{ $group: { _id: "$pipelineStage", count: { $sum: 1 } } }]),
         Lead.aggregate([{ $group: { _id: "$websiteType", count: { $sum: 1 } } }]),
@@ -25,10 +25,14 @@ statsRouter.get(
           Lead.countDocuments({ outreachStatus: "CONVERTED" }),
           Lead.countDocuments({ optedOut: true }),
         ]),
+        // Sum of deal values (aggregation). The count of deals is taken from a
+        // separate countDocuments below, keeping this portable across
+        // Mongo-compatible backends that don't implement $cond / constant $sum.
         Lead.aggregate([
           { $match: { outreachStatus: "CONVERTED", estimatedDealValue: { $gt: 0 } } },
-          { $group: { _id: null, total: { $sum: "$estimatedDealValue" }, count: { $sum: 1 } } },
+          { $group: { _id: null, total: { $sum: "$estimatedDealValue" } } },
         ]),
+        Lead.countDocuments({ outreachStatus: "CONVERTED", estimatedDealValue: { $gt: 0 } }),
         SearchRun.find().sort({ startedAt: -1 }).limit(5).lean(),
         OutreachLog.find().sort({ createdAt: -1 }).limit(15).populate("leadId", "businessName city").lean(),
       ]);
@@ -42,7 +46,7 @@ statsRouter.get(
       totals: { total, pendingApproval, contacted, interested, converted, optedOut },
       revenue: {
         totalDealValue: revenue[0]?.total ?? 0,
-        convertedDeals: revenue[0]?.count ?? 0,
+        convertedDeals: convertedDealsCount,
       },
       byStage: toMap(byStage),
       byWebsiteType: toMap(byWebsiteType),
