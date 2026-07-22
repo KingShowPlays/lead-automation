@@ -120,6 +120,8 @@ export interface Stats {
   byWebsiteType: Record<string, number>;
   byCity: Record<string, number>;
   byOutreachStatus: Record<string, number>;
+  bySource: Record<string, number>;
+  onboardedAt: string | null;
   recentRuns: Array<{
     _id: string;
     trigger: string;
@@ -165,6 +167,10 @@ export interface IntegrationSettings {
   };
   scheduler: { enabled: boolean | null; discoveryCron: string; followUpCron: string; timezone: string };
   checker: { timeoutMs: number; maxRedirects: number; concurrency: number };
+  sources: {
+    manualImportEnabled: boolean;
+    directory: { enabled: boolean; urls: string[]; defaultCity: string; defaultCategory: string; maxPerRun: number };
+  };
 }
 
 export interface Settings {
@@ -178,6 +184,26 @@ export interface Settings {
   discoveryEnabled: boolean;
   maxResultsPerQuery: number;
   integrations: IntegrationSettings;
+  onboardedAt: string | null;
+}
+
+export interface ImportRow {
+  businessName: string;
+  category?: string;
+  city?: string;
+  email?: string;
+  phone?: string;
+  instagramUsername?: string;
+  websiteUrl?: string;
+}
+
+export interface ImportResult {
+  received: number;
+  created: number;
+  duplicates: number;
+  suppressed: number;
+  invalid: number;
+  processing?: { qualified: number };
 }
 
 export interface IntegrationStatus {

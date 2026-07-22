@@ -1,7 +1,7 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { logger } from "../utils/logger.js";
 import { getSettings } from "../models/Settings.js";
-import { getPlacesKey, getSchedulerRuntime, type ResolvedScheduler } from "../config/runtime.js";
+import { getPlacesKey, getSchedulerRuntime, getSourcesRuntime, type ResolvedScheduler } from "../config/runtime.js";
 import { runFullPipeline } from "./pipeline/runPipeline.js";
 import { runFollowUps } from "./outreach/followUp.js";
 
@@ -30,8 +30,11 @@ async function discoveryJob(): Promise<void> {
       logger.info("Scheduled discovery skipped, disabled in settings");
       return;
     }
-    if (!(await getPlacesKey())) {
-      logger.warn("Scheduled discovery skipped, Google Places API key not configured");
+    const placesKey = await getPlacesKey();
+    const sources = await getSourcesRuntime();
+    const anySource = Boolean(placesKey) || (sources.directory.enabled && sources.directory.urls.length > 0);
+    if (!anySource) {
+      logger.warn("Scheduled discovery skipped, no discovery source configured (Places key or directory source)");
       return;
     }
     const result = await runFullPipeline("CRON");

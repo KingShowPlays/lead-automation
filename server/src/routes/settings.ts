@@ -185,6 +185,30 @@ const integrationsSchema = z
       })
       .strict()
       .optional(),
+    sources: z
+      .object({
+        manualImportEnabled: z.boolean().optional(),
+        directory: z
+          .object({
+            enabled: z.boolean().optional(),
+            urls: z
+              .array(
+                z
+                  .string()
+                  .max(500)
+                  .refine((v) => v === "" || /^https?:\/\//.test(v), "each directory URL must be http(s)"),
+              )
+              .max(50)
+              .optional(),
+            defaultCity: z.string().max(80).optional(),
+            defaultCategory: z.string().max(80).optional(),
+            maxPerRun: z.number().int().min(1).max(500).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -228,6 +252,18 @@ settingsRouter.put(
     reloadScheduler().catch((err) => logger.error({ err: String(err) }, "scheduler reload failed"));
 
     res.json({ settings: maskedSettings(settings) });
+  }),
+);
+
+/** POST /api/settings/onboarding, mark the first-run wizard complete (or re-open it). */
+settingsRouter.post(
+  "/onboarding",
+  validateBody(z.object({ complete: z.boolean() }).strict()),
+  asyncHandler(async (req, res) => {
+    const settings = await getSettings();
+    settings.onboardedAt = (req.body as { complete: boolean }).complete ? new Date() : null;
+    await settings.save();
+    res.json({ onboardedAt: settings.onboardedAt });
   }),
 );
 

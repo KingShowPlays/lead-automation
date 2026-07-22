@@ -17,6 +17,8 @@ import {
   RiCheckLine,
   RiErrorWarningLine,
   RiLoader4Line,
+  RiRadarLine,
+  RiRestartLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import type { Settings, TestResult } from "@/lib/types";
@@ -76,6 +78,11 @@ function withDefaults(s: Settings): Settings {
       },
       scheduler: { enabled: null, discoveryCron: "", followUpCron: "", timezone: "", ...i.scheduler },
       checker: { timeoutMs: 0, maxRedirects: 0, concurrency: 0, ...i.checker },
+      sources: {
+        manualImportEnabled: true,
+        ...i.sources,
+        directory: { enabled: false, urls: [], defaultCity: "", defaultCategory: "", maxPerRun: 100, ...i.sources?.directory },
+      },
     },
   };
 }
@@ -151,9 +158,25 @@ export default function SettingsPage() {
             Everything lives in the database and applies without a redeploy. Save first, then use the test buttons.
           </p>
         </div>
-        <button onClick={() => void save()} disabled={busy} className="btn-cta">
-          <RiSaveLine className="h-4 w-4" /> {busy ? "Saving…" : "Save changes"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              try {
+                await api.completeOnboarding(false);
+                toast.success("Setup will show on your next page load");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not reset setup");
+              }
+            }}
+            className="btn-ghost"
+            title="Re-run the first-time setup wizard"
+          >
+            <RiRestartLine className="h-4 w-4" /> Re-run setup
+          </button>
+          <button onClick={() => void save()} disabled={busy} className="btn-cta">
+            <RiSaveLine className="h-4 w-4" /> {busy ? "Saving…" : "Save changes"}
+          </button>
+        </div>
       </motion.header>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
@@ -365,6 +388,110 @@ export default function SettingsPage() {
           Gmail approvals create a real draft in the mailbox. Zoho and Resend have no drafts API, so approving a lead
           holds the message in the queue and sending goes straight out.
         </p>
+      </section>
+
+      {/* Lead sources */}
+      <section className="glass-card mt-6 space-y-5 p-6">
+        <SectionTitle icon={<RiRadarLine className="h-5 w-5" />} title="Lead sources" />
+        <p className="-mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Google Places finds established businesses. These extra sources catch the brand-new ones before they reach
+          Google. They're additive: turning one on never affects the others.
+        </p>
+
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-slate-200/70 p-4 dark:border-slate-700/70">
+          <span>
+            <span className="font-heading text-sm font-bold">Manual and bulk import</span>
+            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+              Paste Instagram finds, referrals, or CAC lookups on the Leads page. The best early-signal source.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-brand-600"
+            checked={settings.integrations.sources.manualImportEnabled}
+            onChange={(e) =>
+              updIntegrations({ sources: { ...settings.integrations.sources, manualImportEnabled: e.target.checked } })
+            }
+          />
+        </label>
+
+        <div className="rounded-2xl border border-slate-200/70 p-4 dark:border-slate-700/70">
+          <label className="flex cursor-pointer items-center justify-between gap-4">
+            <span>
+              <span className="font-heading text-sm font-bold">Directory crawler</span>
+              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                Pull business links from a public directory or sitemap, then run them through the same checks.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-brand-600"
+              checked={settings.integrations.sources.directory.enabled}
+              onChange={(e) =>
+                updIntegrations({
+                  sources: {
+                    ...settings.integrations.sources,
+                    directory: { ...settings.integrations.sources.directory, enabled: e.target.checked },
+                  },
+                })
+              }
+            />
+          </label>
+          {settings.integrations.sources.directory.enabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="label">Directory / sitemap URLs (one per line)</label>
+                <textarea
+                  className="input min-h-24 font-mono text-xs"
+                  placeholder={"https://a-directory.example/new-businesses\nhttps://another.example/sitemap.xml"}
+                  value={settings.integrations.sources.directory.urls.join("\n")}
+                  onChange={(e) =>
+                    updIntegrations({
+                      sources: {
+                        ...settings.integrations.sources,
+                        directory: {
+                          ...settings.integrations.sources.directory,
+                          urls: e.target.value.split("\n").map((u) => u.trim()).filter(Boolean),
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                  label="Default city for these"
+                  value={settings.integrations.sources.directory.defaultCity}
+                  onChange={(v) =>
+                    updIntegrations({
+                      sources: {
+                        ...settings.integrations.sources,
+                        directory: { ...settings.integrations.sources.directory, defaultCity: v },
+                      },
+                    })
+                  }
+                  placeholder="e.g. Lagos"
+                />
+                <TextField
+                  label="Default category"
+                  value={settings.integrations.sources.directory.defaultCategory}
+                  onChange={(v) =>
+                    updIntegrations({
+                      sources: {
+                        ...settings.integrations.sources,
+                        directory: { ...settings.integrations.sources.directory, defaultCategory: v },
+                      },
+                    })
+                  }
+                  placeholder="e.g. fashion stores"
+                />
+              </div>
+              <p className="text-xs text-slate-400">
+                Only crawl directories whose terms allow it. Each business still gets checked and scored individually.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Scheduler + guardrails */}

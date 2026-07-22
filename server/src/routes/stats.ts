@@ -4,6 +4,7 @@ import { OutreachLog } from "../models/OutreachLog.js";
 import { SearchRun } from "../models/SearchRun.js";
 import { asyncHandler } from "../middleware/index.js";
 import { integrationStatus } from "../config/runtime.js";
+import { getSettings } from "../models/Settings.js";
 
 export const statsRouter = Router();
 
@@ -12,12 +13,14 @@ statsRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
     const status = await integrationStatus();
-    const [byStage, byWebsiteType, byCity, byOutreach, totals, revenue, convertedDealsCount, recentRuns, recentActivity] =
+    const settings = await getSettings();
+    const [byStage, byWebsiteType, byCity, byOutreach, bySource, totals, revenue, convertedDealsCount, recentRuns, recentActivity] =
       await Promise.all([
         Lead.aggregate([{ $group: { _id: "$pipelineStage", count: { $sum: 1 } } }]),
         Lead.aggregate([{ $group: { _id: "$websiteType", count: { $sum: 1 } } }]),
         Lead.aggregate([{ $group: { _id: "$city", count: { $sum: 1 } } }]),
         Lead.aggregate([{ $group: { _id: "$outreachStatus", count: { $sum: 1 } } }]),
+        Lead.aggregate([{ $group: { _id: "$discoverySource", count: { $sum: 1 } } }]),
         Promise.all([
           Lead.countDocuments(),
           Lead.countDocuments({ "approval.status": "PENDING" }),
@@ -53,6 +56,8 @@ statsRouter.get(
       byWebsiteType: toMap(byWebsiteType),
       byCity: toMap(byCity),
       byOutreachStatus: toMap(byOutreach),
+      bySource: toMap(bySource),
+      onboardedAt: settings.onboardedAt,
       recentRuns,
       recentActivity,
       integrations: {

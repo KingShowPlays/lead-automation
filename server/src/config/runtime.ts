@@ -269,6 +269,32 @@ export function resolveScheduler(integrations?: IntegrationSettings): ResolvedSc
   };
 }
 
+export interface ResolvedSources {
+  manualImportEnabled: boolean;
+  directory: {
+    enabled: boolean;
+    urls: string[];
+    defaultCity: string;
+    defaultCategory: string;
+    maxPerRun: number;
+  };
+}
+
+export function resolveSources(integrations?: IntegrationSettings): ResolvedSources {
+  const s = integrations?.sources;
+  const d = s?.directory;
+  return {
+    manualImportEnabled: s?.manualImportEnabled ?? true,
+    directory: {
+      enabled: Boolean(d?.enabled),
+      urls: (d?.urls ?? []).map((u) => u.trim()).filter(Boolean),
+      defaultCity: d?.defaultCity?.trim() || "",
+      defaultCategory: d?.defaultCategory?.trim() || "",
+      maxPerRun: Math.max(1, Math.min(d?.maxPerRun || 100, 500)),
+    },
+  };
+}
+
 export interface ResolvedChecker {
   timeoutMs: number;
   maxRedirects: number;
@@ -317,6 +343,10 @@ export async function getSchedulerRuntime(): Promise<ResolvedScheduler> {
 
 export async function getCheckerRuntime(): Promise<ResolvedChecker> {
   return resolveChecker(await integrationsSnapshot());
+}
+
+export async function getSourcesRuntime(): Promise<ResolvedSources> {
+  return resolveSources(await integrationsSnapshot());
 }
 
 /** Integration status summary for the dashboard/stats. */

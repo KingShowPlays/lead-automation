@@ -19,7 +19,8 @@ Stack: Node.js, Express and TypeScript on the server, MongoDB via Mongoose, a Ne
 
 | Step | What happens | Where |
 |---|---|---|
-| 1. Discover | Daily search of every *city × category* combo (e.g. "perfume stores in Port Harcourt"), dedupe by Place ID + normalized name | `server/src/services/discovery` |
+| 0. Set up | First-run wizard walks you through targets and lead sources; only targets are required, everything else is skippable and editable later | `dashboard/src/components/OnboardingGate.tsx` |
+| 1. Discover | Multiple toggleable sources feed one pipeline: Google Places (listed businesses), manual/bulk import (catch new businesses early), and a directory/sitemap crawler. Deduped across sources | `server/src/services/discovery` |
 | 2. Check website | DNS → SSL → HTTP status → redirect loops → response time → mobile viewport → SEO tags → broken pages → Shopify signatures → Linktree/menu platforms → parking pages | `server/src/services/websiteChecker` |
 | 3. Classify | `NO_WEBSITE` `BROKEN_WEBSITE` `SHOPIFY` `LINK_IN_BIO_ONLY` `MENU_PLATFORM_ONLY` `SOCIAL_MEDIA_ONLY` `CUSTOM_WEBSITE` `POOR_WEBSITE` | `classify.ts` |
 | 4. Enrich | Email, WhatsApp, Instagram scraped from the business's **own public pages**, with provenance recorded for every value | `server/src/services/enrichment` |
@@ -80,7 +81,8 @@ Provider options you can set from the dashboard:
 |---|---|
 | AI pitch writer | OpenAI, Anthropic, NVIDIA NIM, or any OpenAI-compatible endpoint (Groq, Together, Ollama, vLLM). Template fallback when off. |
 | Email sending | Gmail (real drafts), Zoho or any SMTP mailbox, Resend. |
-| Discovery | Google Places API key, target cities and categories, results per query. |
+| Lead sources | Google Places, manual/bulk import, and a directory/sitemap crawler. Each is an independent toggle, all additive. See [docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md). |
+| Discovery | Target cities and categories, results per query. |
 | Scheduler | Discovery and follow-up crons, timezone, on/off. Applies live. |
 | Guardrails | Score threshold, daily email cap, follow-up delay, max contact attempts, scoring weights. |
 
@@ -92,8 +94,10 @@ All routes under `/api` require the `x-api-key` header when `API_KEY` is set.
 
 ```
 GET  /health                          liveness (no auth)
-POST /api/pipeline/run                discover + process everything
-POST /api/pipeline/discover           discovery only (optional {cities, categories})
+POST /api/pipeline/run                discover (all enabled sources) + process
+POST /api/pipeline/discover           Google Places discovery only
+POST /api/pipeline/discover-sources   run the non-Places sources only
+POST /api/pipeline/import             manual/bulk lead import {items, city?, category?}
 POST /api/pipeline/process            process unchecked leads
 POST /api/pipeline/follow-ups         send due follow-ups
 POST /api/pipeline/check-website      ad-hoc website audit {url}
@@ -112,8 +116,10 @@ POST /api/leads/:id/recheck           re-run website check + rescore
 POST /api/leads/:id/regenerate-pitch  new AI pitch
 
 GET/POST/DELETE /api/suppression      never-contact list
-GET/PUT /api/settings                 cities, categories, weights, caps
-GET  /api/stats                       funnel, revenue, integrations
+GET/PUT /api/settings                 cities, categories, providers, sources, weights, caps
+POST /api/settings/onboarding         mark first-run setup complete or re-open it
+POST /api/settings/test-ai|test-email|test-places   provider connection tests
+GET  /api/stats                       funnel, revenue, integrations, leads by source
 ```
 
 ## Compliance (built in, not bolted on)
@@ -135,7 +141,8 @@ npm test --workspace server        # ~200 tests: classifier, scoring, extraction
 
 ## Docs
 
-- [docs/SETUP.md](docs/SETUP.md), Google Places, Gmail OAuth refresh token, AI keys
+- [docs/SETUP.md](docs/SETUP.md), providers: Google Places, AI (OpenAI/Anthropic/NVIDIA/custom), email (Gmail/Zoho/Resend)
+- [docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md), finding leads earlier than Google Places
 - [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md), step-by-step Railway deployment
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), how the pipeline fits together
 - [docs/COMPLIANCE.md](docs/COMPLIANCE.md), NDPA controls and outreach policy

@@ -81,6 +81,36 @@ export interface DiscoveredBusiness {
   searchQuery: string;
 }
 
+/**
+ * Source-agnostic incoming lead. Every discovery source (Google Places,
+ * manual/bulk import, directory crawler) normalises to this shape and goes
+ * through the same upsert -> enrich -> score -> pitch pipeline. Google
+ * Places keeps its exact prior behaviour; new sources are purely additive.
+ */
+export interface IncomingLead {
+  businessName: string;
+  category: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  instagramUsername?: string;
+  websiteUrl?: string;
+  googlePlaceId?: string;
+  googleMapsUrl?: string;
+  location?: { lat: number; lng: number };
+  businessStatus?: string;
+  openingSoon?: boolean;
+  rating?: number;
+  userRatingCount?: number;
+  categoryRaw?: string[];
+  searchQuery?: string;
+  /** "google_places" | "manual_import" | "directory" | ... */
+  discoverySource: string;
+  /** Where this record came from (directory page, import batch label). */
+  sourceUrl?: string;
+}
+
 export interface WebsiteCheckResult {
   inputUrl: string | null;
   finalUrl: string | null;

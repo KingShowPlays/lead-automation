@@ -48,12 +48,29 @@ export interface CheckerSettings {
   concurrency: number;
 }
 
+export interface DirectorySourceSettings {
+  enabled: boolean;
+  /** Public directory/sitemap URLs to crawl for business website links. */
+  urls: string[];
+  defaultCity: string;
+  defaultCategory: string;
+  /** Cap on new candidate URLs pulled per run (protects volume + cost). */
+  maxPerRun: number;
+}
+
+export interface SourceSettings {
+  /** Manual/bulk import is always available on demand; this governs UI + auto runs. */
+  manualImportEnabled: boolean;
+  directory: DirectorySourceSettings;
+}
+
 export interface IntegrationSettings {
   googlePlacesApiKey: string;
   ai: AiSettings;
   email: EmailSettings;
   scheduler: SchedulerSettings;
   checker: CheckerSettings;
+  sources: SourceSettings;
 }
 
 export interface SettingsDocument extends Document {
@@ -69,6 +86,8 @@ export interface SettingsDocument extends Document {
   /** Max Places results requested per query (each page = 20; 3 pages max). */
   maxResultsPerQuery: number;
   integrations: IntegrationSettings;
+  /** Set once the first-run onboarding wizard is completed. */
+  onboardedAt: Date | null;
   updatedAt: Date;
 }
 
@@ -144,7 +163,18 @@ const settingsSchema = new Schema<SettingsDocument>(
         maxRedirects: { type: Number, default: 0 },
         concurrency: { type: Number, default: 0 },
       },
+      sources: {
+        manualImportEnabled: { type: Boolean, default: true },
+        directory: {
+          enabled: { type: Boolean, default: false },
+          urls: { type: [String], default: [] },
+          defaultCity: { type: String, default: "" },
+          defaultCategory: { type: String, default: "" },
+          maxPerRun: { type: Number, default: 100 },
+        },
+      },
     },
+    onboardedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

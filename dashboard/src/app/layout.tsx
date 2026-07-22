@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Sidebar } from "@/components/Sidebar";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { AnimatedBackground } from "@/lib/motion";
 import "./globals.css";
 
@@ -24,14 +25,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="relative min-h-screen">
           <AnimatedBackground />
-          <div className="flex">
-            <Sidebar />
-            {/* min-w-0 lets wide tables scroll inside their own container
-                instead of stretching the page sideways on small screens. */}
-            <main className="min-h-screen min-w-0 flex-1 overflow-x-clip px-4 pb-16 pt-6 sm:px-8 lg:px-10">
-              {children}
-            </main>
-          </div>
+          {/* First-run wizard gates the app until finished or skipped. */}
+          <OnboardingGate>
+            <div className="flex">
+              <Sidebar />
+              {/* min-w-0 lets wide tables scroll inside their own container
+                  instead of stretching the page sideways on small screens. */}
+              <main className="min-h-screen min-w-0 flex-1 overflow-x-clip px-4 pb-16 pt-6 sm:px-8 lg:px-10">
+                {children}
+              </main>
+            </div>
+          </OnboardingGate>
         </div>
         <Toaster
           position="top-right"

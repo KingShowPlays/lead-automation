@@ -1,4 +1,14 @@
-import type { IntegrationStatus, Lead, OutreachLogEntry, Settings, Stats, SuppressionEntry, TestResult } from "./types";
+import type {
+  ImportResult,
+  ImportRow,
+  IntegrationStatus,
+  Lead,
+  OutreachLogEntry,
+  Settings,
+  Stats,
+  SuppressionEntry,
+  TestResult,
+} from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
@@ -87,6 +97,24 @@ export const api = {
     }),
 
   runProcess: () => req<{ processed: number; qualified: number }>(`/api/pipeline/process`, { method: "POST", body: "{}" }),
+
+  runSources: () =>
+    req<{ sources: Array<{ source: string; found: number; created: number }>; processing: { qualified: number } }>(
+      `/api/pipeline/discover-sources`,
+      { method: "POST", body: "{}" },
+    ),
+
+  importLeads: (items: ImportRow[], opts: { city?: string; category?: string } = {}) =>
+    req<ImportResult>(`/api/pipeline/import`, {
+      method: "POST",
+      body: JSON.stringify({ items, city: opts.city, category: opts.category, process: true }),
+    }),
+
+  completeOnboarding: (complete: boolean) =>
+    req<{ onboardedAt: string | null }>(`/api/settings/onboarding`, {
+      method: "POST",
+      body: JSON.stringify({ complete }),
+    }),
 
   runFull: () =>
     req<{ found: number; created: number; processed: number; qualified: number }>(`/api/pipeline/run`, {

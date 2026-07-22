@@ -7,7 +7,7 @@
                          │                 server/  (API)               │
                          │                                              │
   cron / n8n / API  ───► │  pipeline.runFullPipeline()                  │
-                         │    1. discover()      Google Places (New)    │
+                         │    1. sources: Places + import + directory   │
                          │    2. processPending() per lead:             │
                          │         checkWebsite() ─ DNS/SSL/HTTP/HTML    │
                          │         classifyWebsite() ─ 8 categories      │
@@ -28,8 +28,11 @@
 
 ## Modules
 
-### Discovery, `services/discovery/googlePlaces.ts`
-Text Search against Places API (New) with a tight field mask (keeps billing on the basic SKU). Paginates up to 60 results/query, flags `FUTURE_OPENING`/`OPENING_SOON` as *opening soon*, skips permanently/temporarily closed. `buildQueries()` produces the `city × category` matrix. **Injectable `fetchImpl`** makes it fully unit-testable without network.
+### Discovery, `services/discovery/`
+Multiple sources feed one shared upsert (`upsertIncomingLead` in `pipeline/runPipeline.ts`), so dedup and suppression behave identically no matter where a lead came from, and enabling one source never affects another.
+- `googlePlaces.ts`, Text Search against Places API (New) with a tight field mask (keeps billing on the basic SKU). Paginates up to 60 results/query, flags `FUTURE_OPENING`/`OPENING_SOON` as opening soon, skips closed. Injectable `fetchImpl` for tests.
+- `sources/directoryCrawler.ts`, pulls candidate business links from a public directory page or `sitemap.xml`, skipping social/aggregator hosts and internal nav, deduped by domain. Pure extraction, injectable fetch.
+- `sources/runSources.ts`, runs the enabled non-Places sources and the manual/bulk import into the shared upsert. `importLeads()` is the manual capture path (Instagram finds, referrals, CAC lookups) that answers the lagging-signal problem of Places. See [DISCOVERY_SOURCES.md](DISCOVERY_SOURCES.md).
 
 ### Website checker, `services/websiteChecker/`
 - `probe.ts`, pure network layer: DNS lookup → manual-redirect HTTP fetch (detects redirect loops, "redirects only to Instagram/WhatsApp"), TLS-error detection with HTTP fallback, capped HTML read, response timing.
@@ -71,7 +74,8 @@ Pure resolvers turn a `Settings.integrations` snapshot into a resolved provider 
 - **Suppression**, `{type, value}` unique; the never-contact list.
 - **OutreachLog**, append-only audit trail (drafts, sends, follow-ups, responses, opt-outs, conversions).
 - **SearchRun**, per-run discovery stats.
-- **Settings**, singleton: cities, categories, weights, thresholds, caps, and an `integrations` sub-document holding the Google Places key, AI provider config, email provider config, scheduler crons, and checker tuning. Secrets never leave the API unmasked.
+- **Settings**, singleton: cities, categories, weights, thresholds, caps, an `onboardedAt` marker for the first-run wizard, and an `integrations` sub-document holding the Google Places key, AI provider config, email provider config, scheduler crons, checker tuning, and lead-source toggles. Secrets never leave the API unmasked.
+- **Lead**, carries a `discoverySource` ("google_places" / "manual_import" / "directory") so you can see which channel converts.
 
 ## Design choices
 

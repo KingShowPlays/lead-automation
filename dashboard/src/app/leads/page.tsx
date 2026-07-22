@@ -4,10 +4,11 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { RiSearchLine, RiArrowLeftSLine, RiArrowRightSLine } from "react-icons/ri";
+import { RiSearchLine, RiArrowLeftSLine, RiArrowRightSLine, RiUploadCloud2Line } from "react-icons/ri";
 import { api } from "@/lib/api";
 import type { Lead } from "@/lib/types";
 import { ScoreBadge, StagePill, WebsiteTypeBadge } from "@/components/badges";
+import { ImportPanel } from "@/components/ImportPanel";
 
 const WEBSITE_TYPES = [
   "NO_WEBSITE",
@@ -40,6 +41,7 @@ function LeadsPageInner() {
   const [outreachStatus] = useState(params.get("outreachStatus") ?? "");
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -79,13 +81,23 @@ function LeadsPageInner() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">
-          All <span className="bg-gradient-to-r from-brand-600 to-purple-600 bg-clip-text text-transparent">leads</span>
-        </h1>
-        {data && (
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{data.total} leads match your filters</p>
-        )}
+      <ImportPanel open={importOpen} onClose={() => setImportOpen(false)} onDone={load} />
+      <motion.header
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-wrap items-start justify-between gap-3"
+      >
+        <div>
+          <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">
+            All <span className="bg-gradient-to-r from-brand-600 to-purple-600 bg-clip-text text-transparent">leads</span>
+          </h1>
+          {data && (
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{data.total} leads match your filters</p>
+          )}
+        </div>
+        <button onClick={() => setImportOpen(true)} className="btn-cta">
+          <RiUploadCloud2Line className="h-4 w-4" /> Import leads
+        </button>
       </motion.header>
 
       {/* Filters */}

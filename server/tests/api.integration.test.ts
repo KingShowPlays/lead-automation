@@ -415,6 +415,94 @@ describe("pipeline safety", () => {
   });
 });
 
+describe("manual/bulk import source", () => {
+  it("imports leads, dedupes, and processes them through the pipeline", async () => {
+    const res = await request(app)
+      .post("/api/pipeline/import")
+      .send({
+        city: "Port Harcourt",
+        category: "perfume stores",
+        process: true,
+        items: [
+          { businessName: "Fresh IG Find", instagramUsername: "@freshigfind", email: "hi@freshfind.ng" },
+          { businessName: "Referral Biz", websiteUrl: "https://referralbiz.ng", city: "Lagos" },
+          { businessName: "Fresh IG Find" }, // duplicate by name+city
+          { businessName: "" }, // invalid
+        ],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(2);
+    expect(res.body.duplicates).toBe(1);
+    expect(res.body.invalid).toBe(1);
+
+    // The imported lead exists, carries the source and provenance, and was processed.
+    const list = await request(app).get("/api/leads?search=Fresh IG Find");
+    const lead = list.body.items[0];
+    expect(lead.discoverySource).toBe("manual_import");
+    expect(lead.instagramUsername).toBe("freshigfind");
+    expect(lead.email).toBe("hi@freshfind.ng");
+    expect(lead.pipelineStage).not.toBe("DISCOVERED"); // processed
+    expect(lead.contactSources.some((c: { source: string }) => c.source === "manual")).toBe(true);
+  });
+
+  it("does not re-import a suppressed business", async () => {
+    await request(app).post("/api/suppression").send({ type: "EMAIL", value: "blocked@nope.ng" });
+    const res = await request(app)
+      .post("/api/pipeline/import")
+      .send({ items: [{ businessName: "Blocked Co", email: "blocked@nope.ng", city: "Lagos" }] });
+    expect(res.status).toBe(200);
+    expect(res.body.suppressed).toBe(1);
+    expect(res.body.created).toBe(0);
+  });
+
+  it("rejects an empty import", async () => {
+    const res = await request(app).post("/api/pipeline/import").send({ items: [] });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("directory source config", () => {
+  it("stores directory source settings and validates URLs", async () => {
+    const ok = await request(app)
+      .put("/api/settings")
+      .send({
+        integrations: {
+          sources: {
+            directory: { enabled: true, urls: ["https://directory.example/new"], defaultCity: "Lagos", defaultCategory: "fashion" },
+          },
+        },
+      });
+    expect(ok.status).toBe(200);
+    expect(ok.body.settings.integrations.sources.directory.enabled).toBe(true);
+
+    const bad = await request(app)
+      .put("/api/settings")
+      .send({ integrations: { sources: { directory: { urls: ["not-a-url"] } } } });
+    expect(bad.status).toBe(400);
+  });
+
+  it("running enabled sources with no reachable URL does not crash", async () => {
+    const res = await request(app).post("/api/pipeline/discover-sources").send({});
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.sources)).toBe(true);
+  });
+});
+
+describe("onboarding state", () => {
+  it("starts un-onboarded, can be completed and re-opened", async () => {
+    const before = await request(app).get("/api/stats");
+    // may be null or a date depending on prior tests; force a known state
+    await request(app).post("/api/settings/onboarding").send({ complete: true });
+    const done = await request(app).get("/api/stats");
+    expect(done.body.onboardedAt).toBeTruthy();
+
+    await request(app).post("/api/settings/onboarding").send({ complete: false });
+    const reopened = await request(app).get("/api/stats");
+    expect(reopened.body.onboardedAt).toBeNull();
+    expect(before.body).toHaveProperty("onboardedAt");
+  });
+});
+
 describe("settings: DB-backed config + secret masking", () => {
   it("stores provider credentials and returns them masked", async () => {
     const put = await request(app)

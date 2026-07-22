@@ -8,10 +8,12 @@ import { scoreLead } from "../scoring/leadScore.js";
 import { generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
+import { normalizeNigerianPhone } from "../../utils/phone.js";
 import { mapWithConcurrency, sleep } from "../../utils/async.js";
 import { getCheckerRuntime, getPlacesKey } from "../../config/runtime.js";
+import { runExtraSources, type SourceRunStats } from "../discovery/sources/runSources.js";
 import { logger } from "../../utils/logger.js";
-import type { DiscoveredBusiness } from "../../types.js";
+import type { DiscoveredBusiness, IncomingLead } from "../../types.js";
 
 /**
  * Pipeline orchestration.
@@ -90,44 +92,88 @@ export async function discover(
   return { runId: String(run._id), ...totals };
 }
 
-type UpsertOutcome = "created" | "duplicates" | "suppressed";
+export type UpsertOutcome = "created" | "duplicates" | "suppressed";
 
+/** Places-specific adapter: maps a DiscoveredBusiness to the shared upsert. */
 async function upsertDiscovered(biz: DiscoveredBusiness): Promise<UpsertOutcome> {
-  // Duplicate check: place id first, then normalized name + city.
-  const nameNorm = normalizeBusinessName(biz.businessName);
-  const existing = await Lead.findOne({
-    $or: [
-      { googlePlaceId: biz.googlePlaceId },
-      { businessNameNormalized: nameNorm, city: biz.city },
-    ],
-  });
-  if (existing) return "duplicates";
-
-  // Never even store leads that match the suppression list.
-  const sup = await isSuppressed({
-    googlePlaceId: biz.googlePlaceId,
-    websiteUrl: biz.websiteUrl,
-  });
-  if (sup.suppressed) return "suppressed";
-
-  await Lead.create({
+  return upsertIncomingLead({
     businessName: biz.businessName,
-    businessNameNormalized: nameNorm,
     category: biz.category,
-    categoryRaw: biz.categoryRaw ?? [],
+    categoryRaw: biz.categoryRaw,
     city: biz.city,
     address: biz.address,
     location: biz.location,
     googlePlaceId: biz.googlePlaceId,
     googleMapsUrl: biz.googleMapsUrl,
     businessStatus: biz.businessStatus,
-    openingSoon: biz.openingSoon ?? false,
+    openingSoon: biz.openingSoon,
     rating: biz.rating,
     userRatingCount: biz.userRatingCount,
     phone: biz.phone,
     websiteUrl: biz.websiteUrl,
     searchQuery: biz.searchQuery,
     discoverySource: "google_places",
+  });
+}
+
+/**
+ * Shared, source-agnostic upsert. Every discovery source funnels through
+ * here, so dedup and suppression behave identically no matter where a lead
+ * came from. New sources never conflict with Google Places: a business seen
+ * by two sources is deduped to one lead, keeping whichever arrived first.
+ */
+export async function upsertIncomingLead(incoming: IncomingLead): Promise<UpsertOutcome> {
+  const nameNorm = normalizeBusinessName(incoming.businessName);
+  const instagram = incoming.instagramUsername?.replace(/^@/, "").trim().toLowerCase();
+
+  // Duplicate check across every identity signal a source might carry.
+  const or: Record<string, unknown>[] = [{ businessNameNormalized: nameNorm, city: incoming.city }];
+  if (incoming.googlePlaceId) or.push({ googlePlaceId: incoming.googlePlaceId });
+  if (incoming.websiteUrl) or.push({ websiteUrl: incoming.websiteUrl });
+  if (incoming.email) or.push({ email: incoming.email.toLowerCase() });
+  if (instagram) or.push({ instagramUsername: instagram });
+  const existing = await Lead.findOne({ $or: or });
+  if (existing) return "duplicates";
+
+  // Never even store leads that match the suppression list.
+  const sup = await isSuppressed({
+    googlePlaceId: incoming.googlePlaceId,
+    websiteUrl: incoming.websiteUrl,
+    email: incoming.email,
+    instagramUsername: instagram,
+  });
+  if (sup.suppressed) return "suppressed";
+
+  const now = new Date();
+  const contactSources: Array<{ field: string; value: string; source: string; sourceUrl?: string; collectedAt: Date }> = [];
+  const provideProvenance = incoming.discoverySource === "manual_import" ? "manual" : incoming.discoverySource;
+  if (incoming.email) contactSources.push({ field: "email", value: incoming.email, source: provideProvenance, sourceUrl: incoming.sourceUrl, collectedAt: now });
+  if (incoming.phone) contactSources.push({ field: "phone", value: incoming.phone, source: provideProvenance, sourceUrl: incoming.sourceUrl, collectedAt: now });
+  if (instagram) contactSources.push({ field: "instagram", value: instagram, source: provideProvenance, sourceUrl: incoming.sourceUrl, collectedAt: now });
+
+  await Lead.create({
+    businessName: incoming.businessName,
+    businessNameNormalized: nameNorm,
+    category: incoming.category,
+    categoryRaw: incoming.categoryRaw ?? [],
+    city: incoming.city,
+    address: incoming.address,
+    location: incoming.location,
+    googlePlaceId: incoming.googlePlaceId,
+    googleMapsUrl: incoming.googleMapsUrl,
+    businessStatus: incoming.businessStatus,
+    openingSoon: incoming.openingSoon ?? false,
+    rating: incoming.rating,
+    userRatingCount: incoming.userRatingCount,
+    phone: incoming.phone,
+    phoneNormalized: incoming.phone ? normalizeNigerianPhone(incoming.phone) ?? undefined : undefined,
+    email: incoming.email?.toLowerCase(),
+    instagramUsername: instagram,
+    instagramUrl: instagram ? `https://instagram.com/${instagram}` : undefined,
+    websiteUrl: incoming.websiteUrl,
+    searchQuery: incoming.searchQuery,
+    discoverySource: incoming.discoverySource,
+    contactSources,
     pipelineStage: "DISCOVERED",
   });
   return "created";
@@ -283,19 +329,34 @@ export async function processPendingLeads(batchSize = 200, maxBatches = 50): Pro
   return result;
 }
 
-export interface FullPipelineResult extends DiscoverResult, BatchProcessResult {}
+export interface FullPipelineResult extends DiscoverResult, BatchProcessResult {
+  sources?: SourceRunStats[];
+}
 
 export async function runFullPipeline(trigger: "CRON" | "MANUAL" | "API" = "MANUAL"): Promise<FullPipelineResult> {
-  const discovery = await discover(trigger);
+  // Google Places runs only when configured; the extra sources run whenever
+  // they are toggled on. Either path alone is enough to feed the pipeline.
+  const placesConfigured = Boolean(await getPlacesKey());
+  const discovery: DiscoverResult = placesConfigured
+    ? await discover(trigger)
+    : { runId: "", found: 0, created: 0, duplicates: 0, suppressed: 0 };
+
+  // Additive: enabled non-Places sources contribute more DISCOVERED leads.
+  const sources = await runExtraSources();
+  for (const s of sources) {
+    discovery.found += s.found;
+    discovery.created += s.created;
+    discovery.duplicates += s.duplicates;
+    discovery.suppressed += s.suppressed;
+  }
+
   const processing = await processPendingLeads();
 
-  // Attach processing stats to the run record.
-  await SearchRun.findByIdAndUpdate(discovery.runId, {
-    $set: {
-      "totals.processed": processing.processed,
-      "totals.qualified": processing.qualified,
-    },
-  });
+  if (discovery.runId) {
+    await SearchRun.findByIdAndUpdate(discovery.runId, {
+      $set: { "totals.processed": processing.processed, "totals.qualified": processing.qualified },
+    });
+  }
 
-  return { ...discovery, ...processing };
+  return { ...discovery, ...processing, sources };
 }

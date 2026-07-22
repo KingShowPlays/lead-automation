@@ -7,12 +7,13 @@ This system does cold B2B outreach to **publicly listed Nigerian businesses**. I
 ## Controls enforced in code
 
 ### 1. Provenance, record where data came from
-Every email, phone number and Instagram handle is stored in `lead.contactSources` with its `source` (google_places / website / manual) and `sourceUrl` and a timestamp. You can always answer "where did we get this?".
+Every email, phone number and Instagram handle is stored in `lead.contactSources` with its `source` (google_places / website / manual / directory) and `sourceUrl` and a timestamp, and each lead records the `discoverySource` it came in through. You can always answer "where did we get this?".
 
 ### 2. Business contacts only, from public sources
-- Discovery uses **Google Places** business listings.
+- Discovery uses **Google Places** business listings, businesses you import by hand, and, when you enable it, public directory pages you point it at.
+- The directory crawler is opt-in and operator-configured. Only point it at directories whose terms allow it. It follows outbound links to business sites and skips social networks and aggregators.
 - Enrichment reads only the **business's own public website** (homepage + a linked contact/about page).
-- We target business contact points (info@, the shop's WhatsApp), not personal profiles. Instagram is used for **manual** personalisation/outreach, never automated cold DMs.
+- We target business contact points (info@, the shop's WhatsApp), not personal profiles. Instagram is used for **manual** discovery and outreach, never automated scraping or cold DMs.
 
 ### 3. Suppression list, permanent do-not-contact
 - Opting a lead out suppresses **all** its identifiers: email, phone, domain, Instagram, Google Place ID.
