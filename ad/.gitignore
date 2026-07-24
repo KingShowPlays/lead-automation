@@ -1,0 +1,7 @@
+node_modules/
+.frames/
+dist/preview.mp4
+dist/_preview.mp4
+dist/vo-parts/
+dist/voiceover.mp3
+dist/yean-leads-60s-vo.mp4

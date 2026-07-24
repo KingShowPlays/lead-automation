@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>YEAN Leads, product film</title>
+<script src="./gsap.min.js"></script>
+<style>
+  @font-face{font-family:'SpaceG';src:url('./assets/space-grotesk-latin.woff2') format('woff2');font-weight:300 700;font-display:block;
+    unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+  @font-face{font-family:'SpaceG';src:url('./assets/space-grotesk-latinext.woff2') format('woff2');font-weight:300 700;font-display:block;
+    unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+  @font-face{font-family:'DMS';src:url('./assets/dm-sans-latin.woff2') format('woff2');font-weight:100 1000;font-display:block;
+    unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+  @font-face{font-family:'DMS';src:url('./assets/dm-sans-latinext.woff2') format('woff2');font-weight:100 1000;font-display:block;
+    unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+
+  :root{
+    --brand:#2563eb; --brand-lt:#60a5fa; --purple:#7c3aed; --cta:#f97316;
+    --emerald:#059669; --rose:#e11d48;
+    --ink:#f8fafc; --muted:#94a3b8; --dim:#64748b;
+    --bg:#070c18; --panel:#0f172a; --line:rgba(148,163,184,.16);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);}
+  body{font-family:'DMS',system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;}
+  .scene{position:absolute;inset:0;opacity:0;will-change:opacity,transform;}
+  /* line-height must clear descenders (y, g, p) or they get clipped */
+  .h1{font-family:'SpaceG';font-weight:700;letter-spacing:-.03em;line-height:1.14;}
+  .mono{font-variant-numeric:tabular-nums;}
+
+  /* ambient */
+  #grid{position:absolute;inset:-10%;opacity:.5;
+    background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);
+    background-size:64px 64px;}
+  .glow{position:absolute;border-radius:50%;filter:blur(120px);opacity:.5;will-change:transform;}
+  #g1{width:900px;height:900px;background:rgba(37,99,235,.30);left:-260px;top:-320px;}
+  #g2{width:820px;height:820px;background:rgba(124,58,237,.24);right:-240px;top:280px;}
+  #g3{width:700px;height:700px;background:rgba(249,115,22,.16);left:640px;bottom:-380px;}
+  #vig{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 45%,transparent 42%,rgba(3,7,18,.72) 100%);}
+
+  /* lower third narration */
+  #cap{position:absolute;left:0;right:0;bottom:40px;text-align:center;opacity:0;}
+  #capInner{display:inline-block;max-width:1500px;padding:14px 32px;
+    background:rgba(8,14,28,.82);border:1px solid var(--line);border-left:4px solid var(--brand);
+    backdrop-filter:blur(10px);}
+  #capText{font-size:29px;line-height:1.32;color:#e8eefc;font-weight:500;letter-spacing:-.01em;}
+  #prog{position:absolute;left:0;bottom:0;height:4px;width:0;background:linear-gradient(90deg,var(--brand),var(--purple),var(--cta));}
+
+  /* S1 */
+  /* overflow masks the slide-up reveal; padding keeps descenders inside the mask */
+  .kline{font-size:82px;overflow:hidden;padding-bottom:.1em;}
+  .kline span{display:inline-block;will-change:transform,opacity;}
+  #s1wrap{position:absolute;left:150px;top:50%;transform:translateY(-50%);}
+  .accent{color:var(--cta);}
+  .tick{color:var(--brand-lt);font-family:'SpaceG';font-size:22px;letter-spacing:.24em;text-transform:uppercase;}
+
+  /* S2 brand */
+  #s2wrap{position:absolute;inset:0;display:grid;place-content:center;text-align:center;}
+  .mark{width:132px;height:132px;margin:0 auto 40px;border-radius:30px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--brand),var(--purple));box-shadow:0 30px 90px rgba(37,99,235,.55);}
+  .mark svg{width:66px;height:66px;}
+
+  /* browser frame */
+  .frame{position:absolute;border-radius:16px;overflow:hidden;background:#0b1222;
+    border:1px solid rgba(148,163,184,.22);box-shadow:0 60px 160px rgba(0,0,0,.75);will-change:transform,opacity;}
+  .bar{height:46px;background:#111c33;display:flex;align-items:center;padding:0 18px;gap:9px;border-bottom:1px solid rgba(148,163,184,.14);}
+  .dot{width:12px;height:12px;border-radius:50%}
+  .url{margin-left:18px;font-size:16px;color:#7d8db0;font-family:'DMS'}
+  .frame img{display:block;width:100%;}
+
+  /* callouts */
+  .callout{position:absolute;padding:16px 22px;background:rgba(9,15,30,.94);
+    border:1px solid var(--line);border-left:4px solid var(--cta);backdrop-filter:blur(8px);will-change:transform,opacity;}
+  .callout .t{font-family:'SpaceG';font-size:24px;font-weight:700;}
+  .callout .d{font-size:18px;color:var(--muted);margin-top:5px;}
+  .ring{position:absolute;border:3px solid var(--cta);border-radius:14px;box-shadow:0 0 0 8px rgba(249,115,22,.14);will-change:transform,opacity;}
+
+  /* cards */
+  .card{position:absolute;width:392px;padding:34px;background:linear-gradient(180deg,#101c33,#0c1526);
+    border:1px solid var(--line);border-top:4px solid var(--brand);will-change:transform,opacity;}
+  .card .ic{width:62px;height:62px;border-radius:15px;display:grid;place-items:center;margin-bottom:22px;font-size:29px;}
+  .card h3{font-family:'SpaceG';font-size:31px;font-weight:700;letter-spacing:-.02em;}
+  .card p{font-size:20px;color:var(--muted);margin-top:12px;line-height:1.5;}
+
+  /* audit list */
+  #auditCard{position:absolute;left:150px;top:262px;width:700px;padding:40px;
+    background:linear-gradient(180deg,#101c33,#0b1425);border:1px solid var(--line);}
+  .chk{display:flex;align-items:center;gap:20px;padding:15px 0;border-bottom:1px solid rgba(148,163,184,.10);font-size:25px;}
+  .chk .box{width:36px;height:36px;border-radius:9px;border:2px solid #33456b;display:grid;place-items:center;flex:0 0 auto;}
+  .chk .box svg{width:20px;height:20px;opacity:0}
+  .chk .lbl{color:#c7d3ea}
+  .chk .st{margin-left:auto;font-size:19px;color:var(--dim);font-family:'SpaceG';letter-spacing:.05em}
+
+  /* score ring */
+  #scoreWrap{position:absolute;right:180px;top:290px;width:420px;text-align:center;}
+  #ringSvg{width:320px;height:320px;transform:rotate(-90deg);}
+  #ringSvg circle{fill:none;stroke-width:20;stroke-linecap:round;}
+  #scoreNum{position:absolute;left:0;right:0;top:104px;font-family:'SpaceG';font-size:108px;font-weight:700;}
+  .chip{display:inline-block;margin-top:26px;padding:13px 26px;font-family:'SpaceG';font-weight:700;font-size:25px;
+    background:rgba(225,29,72,.16);color:#fb7185;border:1px solid rgba(225,29,72,.45);}
+
+  /* metric strip */
+  .metric{position:absolute;padding:28px 34px;background:rgba(9,15,30,.93);border:1px solid var(--line);
+    border-top:4px solid var(--emerald);backdrop-filter:blur(8px);will-change:transform,opacity;text-align:left;}
+  .metric .v{font-family:'SpaceG';font-size:62px;font-weight:700;letter-spacing:-.03em;}
+  .metric .l{font-size:17px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
+
+  /* funnel */
+  #funnel{position:absolute;left:150px;top:250px;width:840px;}
+  .frow{margin-bottom:30px;}
+  .frow .top{display:flex;justify-content:space-between;font-size:25px;margin-bottom:12px;}
+  .frow .track{height:22px;background:rgba(148,163,184,.14);overflow:hidden;}
+  .frow .fill{height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--purple));}
+
+  .pill{display:inline-flex;align-items:center;gap:14px;padding:14px 28px;border:1px solid var(--line);
+    background:rgba(9,15,30,.7);font-size:23px;color:#cbd5e1;margin:0 9px;font-family:'SpaceG';}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div class="glow" id="g1"></div><div class="glow" id="g2"></div><div class="glow" id="g3"></div>
+
+  <!-- S1 PROBLEM -->
+  <div class="scene" id="s1">
+    <div id="s1wrap">
+      <div class="tick" id="s1tick">The problem</div>
+      <div class="h1 kline" style="margin-top:34px"><span id="l1a">Every week, new businesses open.</span></div>
+      <div class="h1 kline" style="margin-top:20px"><span id="l1b">By the time Google lists them,</span></div>
+      <div class="h1 kline" style="margin-top:20px"><span id="l1c" class="accent">someone else built their website.</span></div>
+    </div>
+  </div>
+
+  <!-- S2 BRAND -->
+  <div class="scene" id="s2">
+    <div id="s2wrap">
+      <div class="mark" id="s2mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.2h6L11 22l8.5-11.2h-6L13 2z" fill="#fff"/></svg>
+      </div>
+      <div class="h1" id="s2name" style="font-size:118px">YEAN <span style="color:var(--brand-lt)">Leads</span></div>
+      <div id="s2tag" class="h1" style="font-size:56px;margin-top:26px;color:#dbe6fb">Find them first.</div>
+      <div id="s2sub" style="font-size:27px;color:var(--muted);margin-top:26px">A semi-automated lead engine for web studios</div>
+    </div>
+  </div>
+
+  <!-- S3 OVERVIEW -->
+  <div class="scene" id="s3">
+    <div class="frame" id="f3" style="left:300px;top:96px;width:1320px;">
+      <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">yean-leads.app / overview</span></div>
+      <img src="./assets/01-overview.png" alt="">
+    </div>
+    <div class="metric" id="m1" style="left:70px;top:230px;"><div class="v mono" id="m1v">0</div><div class="l">Businesses tracked</div></div>
+    <div class="metric" id="m2" style="right:56px;top:404px;border-top-color:var(--brand)"><div class="v mono" id="m2v">0</div><div class="l">Awaiting your approval</div></div>
+    <div class="metric" id="m3" style="left:96px;top:580px;border-top-color:var(--cta)"><div class="v mono"><span id="m3v">0</span></div><div class="l">Revenue won</div></div>
+  </div>
+
+  <!-- S4 SOURCES -->
+  <div class="scene" id="s4">
+    <div class="tick" style="position:absolute;left:150px;top:120px" id="s4tick">Discovery</div>
+    <div class="h1" id="s4h" style="position:absolute;left:150px;top:162px;font-size:64px">Three ways to find them</div>
+    <div class="card" id="c1" style="left:150px;top:320px;border-top-color:var(--brand)">
+      <div class="ic" style="background:rgba(37,99,235,.18);color:var(--brand-lt)">◎</div>
+      <h3>Google Places</h3><p>Daily sweep of every city and category you target.</p>
+    </div>
+    <div class="card" id="c2" style="left:600px;top:320px;border-top-color:var(--cta)">
+      <div class="ic" style="background:rgba(249,115,22,.18);color:#fdba74">⌁</div>
+      <h3>Manual import</h3><p>Paste an Instagram find the day it opens. Before Google.</p>
+    </div>
+    <div class="card" id="c3" style="left:1050px;top:320px;border-top-color:var(--purple)">
+      <div class="ic" style="background:rgba(124,58,237,.18);color:#c4b5fd">⊞</div>
+      <h3>Directory crawler</h3><p>Pull public listings and audit each one automatically.</p>
+    </div>
+    <div class="frame" id="f4" style="right:120px;top:236px;width:690px;">
+      <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">import</span></div>
+      <img src="./assets/04-import.png" alt="">
+    </div>
+    <div class="callout" id="co4" style="right:170px;top:664px;"><div class="t">3 valid businesses detected</div><div class="d">Handles, emails and sites parsed automatically</div></div>
+  </div>
+
+  <!-- S5 AUDIT + SCORE -->
+  <div class="scene" id="s5">
+    <div class="tick" style="position:absolute;left:150px;top:120px">Website audit</div>
+    <div class="h1" id="s5h" style="position:absolute;left:150px;top:160px;font-size:60px">Every site checked, every lead scored</div>
+    <div id="auditCard">
+      <div class="chk" data-i="0"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">DNS resolution</div><div class="st">PASS</div></div>
+      <div class="chk" data-i="1"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">SSL certificate</div><div class="st">PASS</div></div>
+      <div class="chk" data-i="2"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">HTTP status and redirects</div><div class="st">PASS</div></div>
+      <div class="chk" data-i="3"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">Mobile responsiveness</div><div class="st">PASS</div></div>
+      <div class="chk" data-i="4"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">Shopify and link-in-bio signatures</div><div class="st">PASS</div></div>
+      <div class="chk" data-i="5"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">Title, description, broken pages</div><div class="st">PASS</div></div>
+    </div>
+    <div id="scoreWrap">
+      <div style="position:relative;display:inline-block">
+        <svg id="ringSvg" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" stroke="rgba(148,163,184,.18)"/>
+          <circle id="ringFg" cx="60" cy="60" r="50" stroke="url(#lg)" stroke-dasharray="314.159" stroke-dashoffset="314.159"/>
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#f97316"/></linearGradient></defs>
+        </svg>
+        <div id="scoreNum" class="mono">0</div>
+      </div>
+      <div><span class="chip" id="s5chip">NO WEBSITE</span></div>
+    </div>
+  </div>
+
+  <!-- S6 PITCH + APPROVAL -->
+  <div class="scene" id="s6">
+    <div class="frame" id="f6" style="left:190px;top:92px;width:1260px;">
+      <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">approval queue</span></div>
+      <img src="./assets/02-queue.png" alt="">
+    </div>
+    <div class="ring" id="r6" style="left:748px;top:440px;width:672px;height:200px;"></div>
+    <div class="callout" id="co6a" style="left:1300px;top:236px;border-left-color:var(--purple)"><div class="t">AI writes the pitch</div><div class="d">From the real audit finding, not a template blast</div></div>
+    <div class="callout" id="co6b" style="left:1300px;top:700px;border-left-color:var(--emerald)"><div class="t">You approve every send</div><div class="d">Edit, approve, or reject. Nothing goes out alone.</div></div>
+  </div>
+
+  <!-- S7 RESULTS -->
+  <div class="scene" id="s7">
+    <div class="tick" style="position:absolute;left:150px;top:120px">Results</div>
+    <div class="h1" id="s7h" style="position:absolute;left:150px;top:160px;font-size:60px">From cold discovery to closed deal</div>
+    <div id="funnel">
+      <div class="frow"><div class="top"><span>Discovered</span><span class="mono" data-n="12">0</span></div><div class="track"><div class="fill" data-w="100"></div></div></div>
+      <div class="frow"><div class="top"><span>Pending approval</span><span class="mono" data-n="10">0</span></div><div class="track"><div class="fill" data-w="83"></div></div></div>
+      <div class="frow"><div class="top"><span>Contacted</span><span class="mono" data-n="2">0</span></div><div class="track"><div class="fill" data-w="17"></div></div></div>
+      <div class="frow"><div class="top"><span>Interested</span><span class="mono" data-n="2">0</span></div><div class="track"><div class="fill" data-w="17"></div></div></div>
+      <div class="frow"><div class="top"><span>Converted</span><span class="mono" data-n="2">0</span></div><div class="track"><div class="fill" data-w="17"></div></div></div>
+    </div>
+    <div class="metric" id="rev" style="right:150px;top:330px;border-top-color:var(--cta);padding:44px 54px">
+      <div class="v mono" style="font-size:86px"><span id="revv">0</span></div>
+      <div class="l">Revenue won</div>
+      <div style="margin-top:22px;font-size:23px;color:#86efac">2 deals closed from the queue</div>
+    </div>
+  </div>
+
+  <!-- S8 CLOSE -->
+  <div class="scene" id="s8">
+    <div style="position:absolute;inset:0;display:grid;place-content:center;text-align:center">
+      <div class="mark" id="s8mark" style="width:112px;height:112px;border-radius:26px">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.2h6L11 22l8.5-11.2h-6L13 2z" fill="#fff"/></svg>
+      </div>
+      <div class="h1" id="s8name" style="font-size:104px">YEAN <span style="color:var(--brand-lt)">Leads</span></div>
+      <div id="s8flow" style="margin-top:44px">
+        <span class="pill">Discover</span><span class="pill">Check</span><span class="pill">Score</span>
+        <span class="pill">Pitch</span><span class="pill">Approve</span><span class="pill" style="border-color:rgba(5,150,105,.5);color:#6ee7b7">Win</span>
+      </div>
+      <div id="s8cta" class="h1" style="font-size:46px;margin-top:56px;color:#dbe6fb">Stop hunting. Start reviewing.</div>
+    </div>
+  </div>
+
+  <div id="vig"></div>
+  <div id="cap"><div id="capInner"><div id="capText"></div></div></div>
+  <div id="prog"></div>
+</div>
+
+<script>
+gsap.registerPlugin();
+const DUR = 53;                       // total seconds
+const q = s => document.querySelector(s);
+const qa = s => Array.from(document.querySelectorAll(s));
+
+/* ---------- narration captions (also the VO script, timed) ---------- */
+const CAPTIONS = [
+  // Scene 1 is kinetic type, so it carries its own line and needs no caption band.
+  [6.4,10.2,  "YEAN Leads finds them first."],
+  [11.0,18.0, "One workspace shows every business you are tracking, what stage it is in, and the revenue you have won."],
+  [19.0,23.2, "Three discovery sources feed it. Google Places sweeps the cities you target."],
+  [23.4,26.2, "Paste an Instagram find the day it opens, months before Google catches up."],
+  [27.2,31.0, "Every website is audited automatically. DNS, SSL, redirects, mobile, and the platform it runs on."],
+  [31.2,34.2, "Each lead is scored, so you only ever see the ones worth your time."],
+  [35.2,39.0, "AI writes a pitch from the real problem it found on their site."],
+  [39.2,42.8, "Then it stops and waits for you. Nothing is ever sent without your approval."],
+  [43.6,47.8, "Cold discovery becomes a closed deal, without the hours of manual hunting."]
+  // The closing scene carries its own line on screen, so it needs no caption band.
+];
+
+function setCaption(t){
+  const hit = CAPTIONS.find(c => t >= c[0] && t <= c[1]);
+  const cap = q('#cap'), tx = q('#capText');
+  if (hit){
+    if (tx.dataset.k !== hit[2]) { tx.dataset.k = hit[2]; tx.textContent = hit[2]; }
+    const inT = Math.min(1,(t-hit[0])/0.32), outT = Math.min(1,(hit[1]-t)/0.32);
+    const o = Math.min(inT,outT);
+    cap.style.opacity = o;
+    cap.style.transform = `translateY(${(1-inT)*18}px)`;
+  } else { cap.style.opacity = 0; }
+}
+
+/* ---------- master timeline ---------- */
+const tl = gsap.timeline({paused:true});
+const show = (sel, at, dur=0.7) => { tl.fromTo(sel,{opacity:0},{opacity:1,duration:dur,ease:'power2.out'},at); };
+const hide = (sel, at, dur=0.6) => { tl.to(sel,{opacity:0,duration:dur,ease:'power2.in'},at); };
+
+/* ambient drift across whole film */
+tl.to('#g1',{x:220,y:170,duration:DUR,ease:'none'},0)
+  .to('#g2',{x:-190,y:130,duration:DUR,ease:'none'},0)
+  .to('#g3',{x:150,y:-160,duration:DUR,ease:'none'},0)
+  .to('#grid',{x:-90,y:-60,duration:DUR,ease:'none'},0)
+  .fromTo('#prog',{width:0},{width:1920,duration:DUR,ease:'none'},0);
+
+/* S1 */
+show('#s1',0.2,0.6);
+tl.fromTo('#s1tick',{opacity:0,y:16},{opacity:1,y:0,duration:.5,ease:'power2.out'},0.5);
+tl.fromTo('#l1a',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},0.85);
+tl.fromTo('#l1b',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},2.05);
+tl.fromTo('#l1c',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},3.15);
+tl.to('#s1wrap',{y:'-=44',duration:2.2,ease:'power1.inOut'},3.4);
+hide('#s1',5.5,0.6);
+
+/* S2 brand */
+show('#s2',6.1,0.6);
+tl.fromTo('#s2mark',{scale:.4,opacity:0,rotate:-24},{scale:1,opacity:1,rotate:0,duration:.9,ease:'back.out(1.7)'},6.3);
+tl.fromTo('#s2name',{opacity:0,y:34},{opacity:1,y:0,duration:.7,ease:'power3.out'},6.9);
+tl.fromTo('#s2tag',{opacity:0,y:26},{opacity:1,y:0,duration:.7,ease:'power3.out'},7.4);
+tl.fromTo('#s2sub',{opacity:0},{opacity:1,duration:.6},7.9);
+tl.to('#s2wrap',{scale:1.045,duration:2.6,ease:'power1.inOut'},7.6);
+hide('#s2',10.2,0.6);
+
+/* S3 overview */
+show('#s3',10.8,0.7);
+tl.fromTo('#f3',{opacity:0,y:90,scale:.955},{opacity:1,y:0,scale:1,duration:1.15,ease:'power3.out'},10.9);
+tl.to('#f3',{y:-58,scale:1.02,duration:6.6,ease:'none'},11.6);
+const pop = (sel,at)=>tl.fromTo(sel,{opacity:0,x:-40,scale:.9},{opacity:1,x:0,scale:1,duration:.7,ease:'back.out(1.5)'},at);
+pop('#m1',12.5); pop('#m2',13.6); pop('#m3',14.7);
+tl.to({v:0},{v:12,duration:1.1,ease:'power2.out',onUpdate(){q('#m1v').textContent=Math.round(this.targets()[0].v)}},12.6);
+tl.to({v:0},{v:10,duration:1.1,ease:'power2.out',onUpdate(){q('#m2v').textContent=Math.round(this.targets()[0].v)}},13.7);
+tl.to({v:0},{v:1130000,duration:1.5,ease:'power2.out',onUpdate(){q('#m3v').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},14.8);
+hide('#s3',18.1,0.7);
+
+/* S4 sources */
+show('#s4',18.8,0.6);
+tl.fromTo('#s4tick',{opacity:0,y:14},{opacity:1,y:0,duration:.5},18.9);
+tl.fromTo('#s4h',{opacity:0,y:26},{opacity:1,y:0,duration:.7,ease:'power3.out'},19.1);
+const cardIn=(sel,at)=>tl.fromTo(sel,{opacity:0,y:70,rotateX:-12},{opacity:1,y:0,rotateX:0,duration:.8,ease:'power3.out'},at);
+cardIn('#c1',19.6); cardIn('#c2',20.15); cardIn('#c3',20.7);
+tl.to('#c1',{opacity:.28,scale:.97,duration:.5},23.3);
+tl.to('#c3',{opacity:.28,scale:.97,duration:.5},23.3);
+tl.to('#c2',{scale:1.05,duration:.6,ease:'power2.out'},23.3);
+tl.fromTo('#f4',{opacity:0,x:90,scale:.95},{opacity:1,x:0,scale:1,duration:.95,ease:'power3.out'},23.5);
+tl.fromTo('#co4',{opacity:0,y:26},{opacity:1,y:0,duration:.6,ease:'back.out(1.6)'},24.6);
+tl.to('#f4',{y:-40,duration:2.0,ease:'none'},24.4);
+hide('#s4',26.3,0.6);
+
+/* S5 audit + score */
+show('#s5',27.0,0.6);
+tl.fromTo('#s5h',{opacity:0,y:24},{opacity:1,y:0,duration:.7,ease:'power3.out'},27.1);
+tl.fromTo('#auditCard',{opacity:0,x:-50},{opacity:1,x:0,duration:.8,ease:'power3.out'},27.3);
+qa('.chk').forEach((el,i)=>{
+  const at = 27.8 + i*0.42;
+  tl.fromTo(el,{opacity:.25},{opacity:1,duration:.3},at);
+  tl.fromTo(el.querySelector('.box svg'),{opacity:0,scale:.4},{opacity:1,scale:1,duration:.34,ease:'back.out(2.4)'},at+0.12);
+  tl.to(el.querySelector('.box'),{borderColor:'#34d399',duration:.3},at+0.12);
+});
+/* ring enters while the checks are still ticking so the frame stays balanced */
+tl.fromTo('#scoreWrap',{opacity:0,scale:.9},{opacity:1,scale:1,duration:.8,ease:'power3.out'},28.9);
+tl.to('#ringFg',{strokeDashoffset:314.159*(1-0.90),duration:2.0,ease:'power2.inOut'},30.4);
+tl.to({v:0},{v:90,duration:2.0,ease:'power2.inOut',onUpdate(){q('#scoreNum').textContent=Math.round(this.targets()[0].v)}},30.4);
+tl.fromTo('#s5chip',{opacity:0,y:18},{opacity:1,y:0,duration:.5,ease:'back.out(1.8)'},32.5);
+hide('#s5',34.3,0.6);
+
+/* S6 pitch + approval */
+show('#s6',35.0,0.6);
+tl.fromTo('#f6',{opacity:0,scale:.955,y:56},{opacity:1,scale:1,y:0,duration:1.0,ease:'power3.out'},35.1);
+tl.fromTo('#co6a',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},36.0);
+tl.fromTo('#r6',{opacity:0,scale:1.1},{opacity:1,scale:1,duration:.6,ease:'power2.out'},36.4);
+tl.to('#r6',{boxShadow:'0 0 0 20px rgba(249,115,22,0)',duration:1.1,ease:'power2.out'},37.0);
+tl.to('#f6',{y:-42,duration:5.0,ease:'none'},36.6);
+tl.fromTo('#co6b',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},39.4);
+tl.to('#r6',{opacity:0,duration:.4},39.4);
+hide('#s6',42.9,0.6);
+
+/* S7 results */
+show('#s7',43.5,0.6);
+tl.fromTo('#s7h',{opacity:0,y:24},{opacity:1,y:0,duration:.7,ease:'power3.out'},43.6);
+qa('#funnel .frow').forEach((row,i)=>{
+  const at = 44.0 + i*0.26;
+  tl.fromTo(row,{opacity:0,x:-34},{opacity:1,x:0,duration:.5,ease:'power2.out'},at);
+  tl.to(row.querySelector('.fill'),{width:row.querySelector('.fill').dataset.w+'%',duration:.9,ease:'power2.out'},at+0.12);
+  const numEl=row.querySelector('[data-n]'), n=+numEl.dataset.n;
+  tl.to({v:0},{v:n,duration:.8,ease:'power2.out',onUpdate(){numEl.textContent=Math.round(this.targets()[0].v)}},at+0.12);
+});
+tl.fromTo('#rev',{opacity:0,scale:.88},{opacity:1,scale:1,duration:.8,ease:'back.out(1.5)'},45.3);
+tl.to({v:0},{v:1130000,duration:1.6,ease:'power2.out',onUpdate(){q('#revv').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},45.5);
+hide('#s7',47.9,0.6);
+
+/* S8 close */
+show('#s8',48.5,0.7);
+tl.fromTo('#s8mark',{scale:.5,opacity:0},{scale:1,opacity:1,duration:.8,ease:'back.out(1.8)'},48.6);
+tl.fromTo('#s8name',{opacity:0,y:28},{opacity:1,y:0,duration:.7,ease:'power3.out'},49.0);
+qa('#s8flow .pill').forEach((p,i)=>tl.fromTo(p,{opacity:0,y:20},{opacity:1,y:0,duration:.42,ease:'power2.out'},49.5+i*0.13));
+tl.fromTo('#s8cta',{opacity:0,y:22},{opacity:1,y:0,duration:.7,ease:'power3.out'},50.6);
+tl.to('#stage',{opacity:0,duration:0.5,ease:'power2.in'},52.5);
+
+/* ---------- deterministic seek API for the frame renderer ---------- */
+window.FILM = {
+  duration: DUR,
+  seek(t){ tl.pause(); tl.time(Math.min(t, DUR)); setCaption(t); },
+  captions: CAPTIONS
+};
+window.FILM_READY = true;
+</script>
+</body>
+</html>
