@@ -52,7 +52,7 @@
   /* overflow masks the slide-up reveal; padding keeps descenders inside the mask */
   .kline{font-size:82px;overflow:hidden;padding-bottom:.1em;}
   .kline span{display:inline-block;will-change:transform,opacity;}
-  #s1wrap{position:absolute;left:150px;top:50%;transform:translateY(-50%);}
+  #s1wrap{position:absolute;left:150px;top:338px;}
   .accent{color:var(--cta);}
   .tick{color:var(--brand-lt);font-family:'SpaceG';font-size:22px;letter-spacing:.24em;text-transform:uppercase;}
 
@@ -80,7 +80,8 @@
   /* cards */
   .card{position:absolute;width:392px;padding:34px;background:linear-gradient(180deg,#101c33,#0c1526);
     border:1px solid var(--line);border-top:4px solid var(--brand);will-change:transform,opacity;}
-  .card .ic{width:62px;height:62px;border-radius:15px;display:grid;place-items:center;margin-bottom:22px;font-size:29px;}
+  .card .ic{width:62px;height:62px;border-radius:15px;display:grid;place-items:center;margin-bottom:22px;}
+  .card .ic svg{display:block;width:30px;height:30px;}
   .card h3{font-family:'SpaceG';font-size:31px;font-weight:700;letter-spacing:-.02em;}
   .card p{font-size:20px;color:var(--muted);margin-top:12px;line-height:1.5;}
 
@@ -88,21 +89,25 @@
   #auditCard{position:absolute;left:150px;top:262px;width:700px;padding:40px;
     background:linear-gradient(180deg,#101c33,#0b1425);border:1px solid var(--line);}
   .chk{display:flex;align-items:center;gap:20px;padding:15px 0;border-bottom:1px solid rgba(148,163,184,.10);font-size:25px;}
+  .chk:last-child{border-bottom:0;}
   .chk .box{width:36px;height:36px;border-radius:9px;border:2px solid #33456b;display:grid;place-items:center;flex:0 0 auto;}
-  .chk .box svg{width:20px;height:20px;opacity:0}
+  .chk .box svg{display:block;width:20px;height:20px;opacity:0}
   .chk .lbl{color:#c7d3ea}
   .chk .st{margin-left:auto;font-size:19px;color:var(--dim);font-family:'SpaceG';letter-spacing:.05em}
 
   /* score ring */
   #scoreWrap{position:absolute;right:180px;top:290px;width:420px;text-align:center;}
-  #ringSvg{width:320px;height:320px;transform:rotate(-90deg);}
+  /* fixed-size box + inset:0 grid centring keeps the value dead centre of the ring */
+  #ringBox{position:relative;width:320px;height:320px;margin:0 auto;}
+  #ringSvg{display:block;width:320px;height:320px;transform:rotate(-90deg);}
   #ringSvg circle{fill:none;stroke-width:20;stroke-linecap:round;}
-  #scoreNum{position:absolute;left:0;right:0;top:104px;font-family:'SpaceG';font-size:108px;font-weight:700;}
+  #scoreNum{position:absolute;inset:0;display:grid;place-items:center;
+    font-family:'SpaceG';font-size:108px;font-weight:700;line-height:1;}
   .chip{display:inline-block;margin-top:26px;padding:13px 26px;font-family:'SpaceG';font-weight:700;font-size:25px;
     background:rgba(225,29,72,.16);color:#fb7185;border:1px solid rgba(225,29,72,.45);}
 
   /* metric strip */
-  .metric{position:absolute;padding:28px 34px;background:rgba(9,15,30,.93);border:1px solid var(--line);
+  .metric{position:absolute;width:352px;padding:28px 34px;background:rgba(9,15,30,.93);border:1px solid var(--line);
     border-top:4px solid var(--emerald);backdrop-filter:blur(8px);will-change:transform,opacity;text-align:left;}
   .metric .v{font-family:'SpaceG';font-size:62px;font-weight:700;letter-spacing:-.03em;}
   .metric .l{font-size:17px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
@@ -151,9 +156,9 @@
       <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">yean-leads.app / overview</span></div>
       <img src="./assets/01-overview.png" alt="">
     </div>
-    <div class="metric" id="m1" style="left:70px;top:230px;"><div class="v mono" id="m1v">0</div><div class="l">Businesses tracked</div></div>
-    <div class="metric" id="m2" style="right:56px;top:404px;border-top-color:var(--brand)"><div class="v mono" id="m2v">0</div><div class="l">Awaiting your approval</div></div>
-    <div class="metric" id="m3" style="left:96px;top:580px;border-top-color:var(--cta)"><div class="v mono"><span id="m3v">0</span></div><div class="l">Revenue won</div></div>
+    <div class="metric" id="m1" style="left:88px;top:214px;"><div class="v mono" id="m1v">0</div><div class="l">Businesses tracked</div></div>
+    <div class="metric" id="m2" style="right:88px;top:404px;border-top-color:var(--brand)"><div class="v mono" id="m2v">0</div><div class="l">Awaiting your approval</div></div>
+    <div class="metric" id="m3" style="left:88px;top:594px;border-top-color:var(--cta)"><div class="v mono"><span id="m3v">0</span></div><div class="l">Revenue won</div></div>
   </div>
 
   <!-- S4 SOURCES -->
@@ -161,22 +166,22 @@
     <div class="tick" style="position:absolute;left:150px;top:120px" id="s4tick">Discovery</div>
     <div class="h1" id="s4h" style="position:absolute;left:150px;top:162px;font-size:64px">Three ways to find them</div>
     <div class="card" id="c1" style="left:150px;top:320px;border-top-color:var(--brand)">
-      <div class="ic" style="background:rgba(37,99,235,.18);color:var(--brand-lt)">◎</div>
+      <div class="ic" style="background:rgba(37,99,235,.18);color:#93c5fd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></div>
       <h3>Google Places</h3><p>Daily sweep of every city and category you target.</p>
     </div>
     <div class="card" id="c2" style="left:600px;top:320px;border-top-color:var(--cta)">
-      <div class="ic" style="background:rgba(249,115,22,.18);color:#fdba74">⌁</div>
+      <div class="ic" style="background:rgba(249,115,22,.18);color:#fdba74"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></div>
       <h3>Manual import</h3><p>Paste an Instagram find the day it opens. Before Google.</p>
     </div>
     <div class="card" id="c3" style="left:1050px;top:320px;border-top-color:var(--purple)">
-      <div class="ic" style="background:rgba(124,58,237,.18);color:#c4b5fd">⊞</div>
+      <div class="ic" style="background:rgba(124,58,237,.18);color:#c4b5fd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7"/><rect x="13.5" y="3.5" width="7" height="7"/><rect x="3.5" y="13.5" width="7" height="7"/><rect x="13.5" y="13.5" width="7" height="7"/></svg></div>
       <h3>Directory crawler</h3><p>Pull public listings and audit each one automatically.</p>
     </div>
     <div class="frame" id="f4" style="right:120px;top:236px;width:690px;">
       <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">import</span></div>
       <img src="./assets/04-import.png" alt="">
     </div>
-    <div class="callout" id="co4" style="right:170px;top:664px;"><div class="t">3 valid businesses detected</div><div class="d">Handles, emails and sites parsed automatically</div></div>
+    <div class="callout" id="co4" style="right:170px;top:742px;"><div class="t">3 valid businesses detected</div><div class="d">Handles, emails and sites parsed automatically</div></div>
   </div>
 
   <!-- S5 AUDIT + SCORE -->
@@ -192,7 +197,7 @@
       <div class="chk" data-i="5"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5"><path d="M4 12.5 9.5 18 20 6.5"/></svg></div><div class="lbl">Title, description, broken pages</div><div class="st">PASS</div></div>
     </div>
     <div id="scoreWrap">
-      <div style="position:relative;display:inline-block">
+      <div id="ringBox">
         <svg id="ringSvg" viewBox="0 0 120 120">
           <circle cx="60" cy="60" r="50" stroke="rgba(148,163,184,.18)"/>
           <circle id="ringFg" cx="60" cy="60" r="50" stroke="url(#lg)" stroke-dasharray="314.159" stroke-dashoffset="314.159"/>
@@ -210,7 +215,7 @@
       <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">approval queue</span></div>
       <img src="./assets/02-queue.png" alt="">
     </div>
-    <div class="ring" id="r6" style="left:748px;top:440px;width:672px;height:200px;"></div>
+    <div class="ring" id="r6" style="left:766px;top:496px;width:646px;height:180px;"></div>
     <div class="callout" id="co6a" style="left:1300px;top:236px;border-left-color:var(--purple)"><div class="t">AI writes the pitch</div><div class="d">From the real audit finding, not a template blast</div></div>
     <div class="callout" id="co6b" style="left:1300px;top:700px;border-left-color:var(--emerald)"><div class="t">You approve every send</div><div class="d">Edit, approve, or reject. Nothing goes out alone.</div></div>
   </div>
@@ -255,24 +260,45 @@
 
 <script>
 gsap.registerPlugin();
-const DUR = 53;                       // total seconds
+/* ------------------------------------------------------------------
+   Timing is derived from the measured narration, so the picture is cut
+   to the voice rather than the voice squeezed into the picture.
+   SEG[i] = [in-point, spoken duration]. Regenerate with ad/retime.mjs
+   if the script changes.
+   ------------------------------------------------------------------ */
+const SEG = [
+  [0.60, 7.24], [8.44, 2.44], [11.48, 5.95], [18.03, 4.70], [23.33, 5.08],
+  [29.01, 7.03], [36.64, 4.68], [41.92, 4.53], [47.05, 3.84], [51.49, 2.97],
+  [55.60, 4.05],
+];
+const NARRATION = [
+  "Every week, new businesses open. By the time Google lists them, someone else built their website.",
+  "YEAN Leads finds them first.",
+  "One workspace. Every business you track, every stage, every naira won.",
+  "Three sources feed it. Google Places sweeps the cities you target.",
+  "Or paste an Instagram find the day it opens, long before Google.",
+  "Every site is audited automatically. DNS, SSL, redirects, mobile.",
+  "Every lead is scored, so you only see the ones worth your time.",
+  "AI writes the pitch from the real problem it found on their site.",
+  "Then it waits. Nothing is sent without your approval.",
+  "Cold discovery becomes a closed deal.",
+  "YEAN Leads. Stop hunting. Start reviewing.",
+];
+const DUR = 61.5;
+
+/* scene windows [in, out] */
+const SC = {
+  s1: [0.15,  8.10], s2: [8.10,  11.15], s3: [11.15, 17.85], s4: [17.85, 28.85],
+  s5: [28.85, 41.75], s6: [41.75, 51.15], s7: [51.15, 55.35], s8: [55.35, 61.30],
+};
+
 const q = s => document.querySelector(s);
 const qa = s => Array.from(document.querySelectorAll(s));
 
-/* ---------- narration captions (also the VO script, timed) ---------- */
-const CAPTIONS = [
-  // Scene 1 is kinetic type, so it carries its own line and needs no caption band.
-  [6.4,10.2,  "YEAN Leads finds them first."],
-  [11.0,18.0, "One workspace shows every business you are tracking, what stage it is in, and the revenue you have won."],
-  [19.0,23.2, "Three discovery sources feed it. Google Places sweeps the cities you target."],
-  [23.4,26.2, "Paste an Instagram find the day it opens, months before Google catches up."],
-  [27.2,31.0, "Every website is audited automatically. DNS, SSL, redirects, mobile, and the platform it runs on."],
-  [31.2,34.2, "Each lead is scored, so you only ever see the ones worth your time."],
-  [35.2,39.0, "AI writes a pitch from the real problem it found on their site."],
-  [39.2,42.8, "Then it stops and waits for you. Nothing is ever sent without your approval."],
-  [43.6,47.8, "Cold discovery becomes a closed deal, without the hours of manual hunting."]
-  // The closing scene carries its own line on screen, so it needs no caption band.
-];
+/* Scenes 1 and 8 carry their line as full-screen type, so they get no band. */
+const CAPTIONS = NARRATION
+  .map((text, i) => [SEG[i][0], SEG[i][0] + SEG[i][1] + 0.35, text])
+  .filter((_, i) => i !== 0 && i !== 10);
 
 function setCaption(t){
   const hit = CAPTIONS.find(c => t >= c[0] && t <= c[1]);
@@ -280,122 +306,126 @@ function setCaption(t){
   if (hit){
     if (tx.dataset.k !== hit[2]) { tx.dataset.k = hit[2]; tx.textContent = hit[2]; }
     const inT = Math.min(1,(t-hit[0])/0.32), outT = Math.min(1,(hit[1]-t)/0.32);
-    const o = Math.min(inT,outT);
-    cap.style.opacity = o;
+    cap.style.opacity = Math.min(inT,outT);
     cap.style.transform = `translateY(${(1-inT)*18}px)`;
   } else { cap.style.opacity = 0; }
 }
 
-/* ---------- master timeline ---------- */
 const tl = gsap.timeline({paused:true});
-const show = (sel, at, dur=0.7) => { tl.fromTo(sel,{opacity:0},{opacity:1,duration:dur,ease:'power2.out'},at); };
-const hide = (sel, at, dur=0.6) => { tl.to(sel,{opacity:0,duration:dur,ease:'power2.in'},at); };
+/* scene in/out, driven by the windows above */
+Object.entries(SC).forEach(([id,[a,b]]) => {
+  tl.fromTo('#'+id,{opacity:0},{opacity:1,duration:0.6,ease:'power2.out'},a);
+  tl.to('#'+id,{opacity:0,duration:0.55,ease:'power2.in'},b-0.55);
+});
 
-/* ambient drift across whole film */
+/* ambient drift for the whole film */
 tl.to('#g1',{x:220,y:170,duration:DUR,ease:'none'},0)
   .to('#g2',{x:-190,y:130,duration:DUR,ease:'none'},0)
   .to('#g3',{x:150,y:-160,duration:DUR,ease:'none'},0)
   .to('#grid',{x:-90,y:-60,duration:DUR,ease:'none'},0)
   .fromTo('#prog',{width:0},{width:1920,duration:DUR,ease:'none'},0);
 
-/* S1 */
-show('#s1',0.2,0.6);
-tl.fromTo('#s1tick',{opacity:0,y:16},{opacity:1,y:0,duration:.5,ease:'power2.out'},0.5);
-tl.fromTo('#l1a',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},0.85);
-tl.fromTo('#l1b',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},2.05);
-tl.fromTo('#l1c',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},3.15);
-tl.to('#s1wrap',{y:'-=44',duration:2.2,ease:'power1.inOut'},3.4);
-hide('#s1',5.5,0.6);
+/* S1, three lines revealed in step with the three spoken clauses */
+{ const [a] = SC.s1;
+  tl.fromTo('#s1tick',{opacity:0,y:16},{opacity:1,y:0,duration:.5,ease:'power2.out'},a+0.35);
+  tl.fromTo('#l1a',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},a+0.55);
+  tl.fromTo('#l1b',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},a+2.85);
+  tl.fromTo('#l1c',{yPercent:110,opacity:0},{yPercent:0,opacity:1,duration:.85,ease:'power3.out'},a+5.05);
+  tl.to('#s1wrap',{y:'-=40',duration:2.4,ease:'power1.inOut'},a+5.3);
+}
 
 /* S2 brand */
-show('#s2',6.1,0.6);
-tl.fromTo('#s2mark',{scale:.4,opacity:0,rotate:-24},{scale:1,opacity:1,rotate:0,duration:.9,ease:'back.out(1.7)'},6.3);
-tl.fromTo('#s2name',{opacity:0,y:34},{opacity:1,y:0,duration:.7,ease:'power3.out'},6.9);
-tl.fromTo('#s2tag',{opacity:0,y:26},{opacity:1,y:0,duration:.7,ease:'power3.out'},7.4);
-tl.fromTo('#s2sub',{opacity:0},{opacity:1,duration:.6},7.9);
-tl.to('#s2wrap',{scale:1.045,duration:2.6,ease:'power1.inOut'},7.6);
-hide('#s2',10.2,0.6);
+{ const [a] = SC.s2;
+  tl.fromTo('#s2mark',{scale:.4,opacity:0,rotate:-24},{scale:1,opacity:1,rotate:0,duration:.85,ease:'back.out(1.7)'},a+0.15);
+  tl.fromTo('#s2name',{opacity:0,y:34},{opacity:1,y:0,duration:.65,ease:'power3.out'},a+0.55);
+  tl.fromTo('#s2tag',{opacity:0,y:26},{opacity:1,y:0,duration:.65,ease:'power3.out'},a+1.0);
+  tl.fromTo('#s2sub',{opacity:0},{opacity:1,duration:.55},a+1.45);
+  tl.to('#s2wrap',{scale:1.04,duration:2.4,ease:'power1.inOut'},a+0.9);
+}
 
 /* S3 overview */
-show('#s3',10.8,0.7);
-tl.fromTo('#f3',{opacity:0,y:90,scale:.955},{opacity:1,y:0,scale:1,duration:1.15,ease:'power3.out'},10.9);
-tl.to('#f3',{y:-58,scale:1.02,duration:6.6,ease:'none'},11.6);
-const pop = (sel,at)=>tl.fromTo(sel,{opacity:0,x:-40,scale:.9},{opacity:1,x:0,scale:1,duration:.7,ease:'back.out(1.5)'},at);
-pop('#m1',12.5); pop('#m2',13.6); pop('#m3',14.7);
-tl.to({v:0},{v:12,duration:1.1,ease:'power2.out',onUpdate(){q('#m1v').textContent=Math.round(this.targets()[0].v)}},12.6);
-tl.to({v:0},{v:10,duration:1.1,ease:'power2.out',onUpdate(){q('#m2v').textContent=Math.round(this.targets()[0].v)}},13.7);
-tl.to({v:0},{v:1130000,duration:1.5,ease:'power2.out',onUpdate(){q('#m3v').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},14.8);
-hide('#s3',18.1,0.7);
+{ const [a] = SC.s3;
+  tl.fromTo('#f3',{opacity:0,y:90,scale:.955},{opacity:1,y:0,scale:1,duration:1.1,ease:'power3.out'},a+0.05);
+  tl.to('#f3',{y:-52,scale:1.02,duration:5.9,ease:'none'},a+0.7);
+  const pop=(sel,at)=>tl.fromTo(sel,{opacity:0,x:-40,scale:.9},{opacity:1,x:0,scale:1,duration:.65,ease:'back.out(1.5)'},at);
+  pop('#m1',a+1.25); pop('#m2',a+2.35); pop('#m3',a+3.45);
+  tl.to({v:0},{v:12,duration:1.0,ease:'power2.out',onUpdate(){q('#m1v').textContent=Math.round(this.targets()[0].v)}},a+1.35);
+  tl.to({v:0},{v:10,duration:1.0,ease:'power2.out',onUpdate(){q('#m2v').textContent=Math.round(this.targets()[0].v)}},a+2.45);
+  tl.to({v:0},{v:1130000,duration:1.4,ease:'power2.out',onUpdate(){q('#m3v').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},a+3.55);
+}
 
-/* S4 sources */
-show('#s4',18.8,0.6);
-tl.fromTo('#s4tick',{opacity:0,y:14},{opacity:1,y:0,duration:.5},18.9);
-tl.fromTo('#s4h',{opacity:0,y:26},{opacity:1,y:0,duration:.7,ease:'power3.out'},19.1);
-const cardIn=(sel,at)=>tl.fromTo(sel,{opacity:0,y:70,rotateX:-12},{opacity:1,y:0,rotateX:0,duration:.8,ease:'power3.out'},at);
-cardIn('#c1',19.6); cardIn('#c2',20.15); cardIn('#c3',20.7);
-tl.to('#c1',{opacity:.28,scale:.97,duration:.5},23.3);
-tl.to('#c3',{opacity:.28,scale:.97,duration:.5},23.3);
-tl.to('#c2',{scale:1.05,duration:.6,ease:'power2.out'},23.3);
-tl.fromTo('#f4',{opacity:0,x:90,scale:.95},{opacity:1,x:0,scale:1,duration:.95,ease:'power3.out'},23.5);
-tl.fromTo('#co4',{opacity:0,y:26},{opacity:1,y:0,duration:.6,ease:'back.out(1.6)'},24.6);
-tl.to('#f4',{y:-40,duration:2.0,ease:'none'},24.4);
-hide('#s4',26.3,0.6);
+/* S4 sources, then the import panel */
+{ const [a] = SC.s4, imp = SEG[4][0];      // second half starts with its own line
+  tl.fromTo('#s4tick',{opacity:0,y:14},{opacity:1,y:0,duration:.5},a+0.1);
+  tl.fromTo('#s4h',{opacity:0,y:26},{opacity:1,y:0,duration:.7,ease:'power3.out'},a+0.3);
+  const cardIn=(sel,at)=>tl.fromTo(sel,{opacity:0,y:70,rotateX:-12},{opacity:1,y:0,rotateX:0,duration:.8,ease:'power3.out'},at);
+  cardIn('#c1',a+0.75); cardIn('#c2',a+1.35); cardIn('#c3',a+1.95);
+  /* clear the right half before the import frame lands there */
+  tl.to('#c1',{opacity:0,y:-26,duration:.5,ease:'power2.in'},imp-0.35);
+  tl.to('#c3',{opacity:0,y:-26,duration:.5,ease:'power2.in'},imp-0.35);
+  tl.to('#c2',{x:-450,y:64,scale:1.06,duration:.75,ease:'power3.inOut'},imp-0.35);
+  tl.fromTo('#f4',{opacity:0,x:90,scale:.95},{opacity:1,x:0,scale:1,duration:.95,ease:'power3.out'},imp-0.05);
+  tl.fromTo('#co4',{opacity:0,y:26},{opacity:1,y:0,duration:.6,ease:'back.out(1.6)'},imp+1.5);
+  tl.to('#f4',{y:-36,duration:3.2,ease:'none'},imp+0.9);
+}
 
-/* S5 audit + score */
-show('#s5',27.0,0.6);
-tl.fromTo('#s5h',{opacity:0,y:24},{opacity:1,y:0,duration:.7,ease:'power3.out'},27.1);
-tl.fromTo('#auditCard',{opacity:0,x:-50},{opacity:1,x:0,duration:.8,ease:'power3.out'},27.3);
-qa('.chk').forEach((el,i)=>{
-  const at = 27.8 + i*0.42;
-  tl.fromTo(el,{opacity:.25},{opacity:1,duration:.3},at);
-  tl.fromTo(el.querySelector('.box svg'),{opacity:0,scale:.4},{opacity:1,scale:1,duration:.34,ease:'back.out(2.4)'},at+0.12);
-  tl.to(el.querySelector('.box'),{borderColor:'#34d399',duration:.3},at+0.12);
-});
-/* ring enters while the checks are still ticking so the frame stays balanced */
-tl.fromTo('#scoreWrap',{opacity:0,scale:.9},{opacity:1,scale:1,duration:.8,ease:'power3.out'},28.9);
-tl.to('#ringFg',{strokeDashoffset:314.159*(1-0.90),duration:2.0,ease:'power2.inOut'},30.4);
-tl.to({v:0},{v:90,duration:2.0,ease:'power2.inOut',onUpdate(){q('#scoreNum').textContent=Math.round(this.targets()[0].v)}},30.4);
-tl.fromTo('#s5chip',{opacity:0,y:18},{opacity:1,y:0,duration:.5,ease:'back.out(1.8)'},32.5);
-hide('#s5',34.3,0.6);
+/* S5 audit checks, then the score */
+{ const [a] = SC.s5, score = SEG[6][0];
+  tl.fromTo('#s5h',{opacity:0,y:24},{opacity:1,y:0,duration:.7,ease:'power3.out'},a+0.15);
+  tl.fromTo('#auditCard',{opacity:0,x:-50},{opacity:1,x:0,duration:.8,ease:'power3.out'},a+0.35);
+  qa('.chk').forEach((el,i)=>{
+    const at = a + 0.95 + i*0.95;                   // paced to the spoken list
+    tl.fromTo(el,{opacity:.25},{opacity:1,duration:.3},at);
+    tl.fromTo(el.querySelector('.box svg'),{opacity:0,scale:.4},{opacity:1,scale:1,duration:.34,ease:'back.out(2.4)'},at+0.12);
+    tl.to(el.querySelector('.box'),{borderColor:'#34d399',duration:.3},at+0.12);
+  });
+  tl.fromTo('#scoreWrap',{opacity:0,scale:.9},{opacity:1,scale:1,duration:.8,ease:'power3.out'},score-0.5);
+  tl.to('#ringFg',{strokeDashoffset:314.159*(1-0.90),duration:2.2,ease:'power2.inOut'},score+0.2);
+  tl.to({v:0},{v:90,duration:2.2,ease:'power2.inOut',onUpdate(){q('#scoreNum').textContent=Math.round(this.targets()[0].v)}},score+0.2);
+  tl.fromTo('#s5chip',{opacity:0,y:18},{opacity:1,y:0,duration:.5,ease:'back.out(1.8)'},score+2.6);
+}
 
-/* S6 pitch + approval */
-show('#s6',35.0,0.6);
-tl.fromTo('#f6',{opacity:0,scale:.955,y:56},{opacity:1,scale:1,y:0,duration:1.0,ease:'power3.out'},35.1);
-tl.fromTo('#co6a',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},36.0);
-tl.fromTo('#r6',{opacity:0,scale:1.1},{opacity:1,scale:1,duration:.6,ease:'power2.out'},36.4);
-tl.to('#r6',{boxShadow:'0 0 0 20px rgba(249,115,22,0)',duration:1.1,ease:'power2.out'},37.0);
-tl.to('#f6',{y:-42,duration:5.0,ease:'none'},36.6);
-tl.fromTo('#co6b',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},39.4);
-tl.to('#r6',{opacity:0,duration:.4},39.4);
-hide('#s6',42.9,0.6);
+/* S6 pitch, then the approval gate */
+{ const [a] = SC.s6, approve = SEG[8][0];
+  tl.fromTo('#f6',{opacity:0,scale:.955,y:56},{opacity:1,scale:1,y:0,duration:1.0,ease:'power3.out'},a+0.05);
+  tl.fromTo('#co6a',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},a+0.85);
+  tl.fromTo('#r6',{opacity:0,scale:1.1},{opacity:1,scale:1,duration:.6,ease:'power2.out'},a+1.25);
+  tl.to('#r6',{boxShadow:'0 0 0 20px rgba(249,115,22,0)',duration:1.1,ease:'power2.out'},a+1.9);
+  tl.to('#f6',{y:-40,duration:6.0,ease:'none'},a+1.4);
+  tl.to('#r6',{opacity:0,duration:.4},approve-0.2);
+  tl.fromTo('#co6b',{opacity:0,x:44},{opacity:1,x:0,duration:.65,ease:'power3.out'},approve+0.15);
+}
 
 /* S7 results */
-show('#s7',43.5,0.6);
-tl.fromTo('#s7h',{opacity:0,y:24},{opacity:1,y:0,duration:.7,ease:'power3.out'},43.6);
-qa('#funnel .frow').forEach((row,i)=>{
-  const at = 44.0 + i*0.26;
-  tl.fromTo(row,{opacity:0,x:-34},{opacity:1,x:0,duration:.5,ease:'power2.out'},at);
-  tl.to(row.querySelector('.fill'),{width:row.querySelector('.fill').dataset.w+'%',duration:.9,ease:'power2.out'},at+0.12);
-  const numEl=row.querySelector('[data-n]'), n=+numEl.dataset.n;
-  tl.to({v:0},{v:n,duration:.8,ease:'power2.out',onUpdate(){numEl.textContent=Math.round(this.targets()[0].v)}},at+0.12);
-});
-tl.fromTo('#rev',{opacity:0,scale:.88},{opacity:1,scale:1,duration:.8,ease:'back.out(1.5)'},45.3);
-tl.to({v:0},{v:1130000,duration:1.6,ease:'power2.out',onUpdate(){q('#revv').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},45.5);
-hide('#s7',47.9,0.6);
+{ const [a] = SC.s7;
+  tl.fromTo('#s7h',{opacity:0,y:24},{opacity:1,y:0,duration:.6,ease:'power3.out'},a+0.1);
+  qa('#funnel .frow').forEach((row,i)=>{
+    const at = a + 0.35 + i*0.2;
+    tl.fromTo(row,{opacity:0,x:-34},{opacity:1,x:0,duration:.45,ease:'power2.out'},at);
+    tl.to(row.querySelector('.fill'),{width:row.querySelector('.fill').dataset.w+'%',duration:.8,ease:'power2.out'},at+0.1);
+    const numEl=row.querySelector('[data-n]'), n=+numEl.dataset.n;
+    tl.to({v:0},{v:n,duration:.7,ease:'power2.out',onUpdate(){numEl.textContent=Math.round(this.targets()[0].v)}},at+0.1);
+  });
+  tl.fromTo('#rev',{opacity:0,scale:.88},{opacity:1,scale:1,duration:.7,ease:'back.out(1.5)'},a+1.35);
+  tl.to({v:0},{v:1130000,duration:1.5,ease:'power2.out',onUpdate(){q('#revv').textContent='₦'+Math.round(this.targets()[0].v).toLocaleString()}},a+1.5);
+}
 
 /* S8 close */
-show('#s8',48.5,0.7);
-tl.fromTo('#s8mark',{scale:.5,opacity:0},{scale:1,opacity:1,duration:.8,ease:'back.out(1.8)'},48.6);
-tl.fromTo('#s8name',{opacity:0,y:28},{opacity:1,y:0,duration:.7,ease:'power3.out'},49.0);
-qa('#s8flow .pill').forEach((p,i)=>tl.fromTo(p,{opacity:0,y:20},{opacity:1,y:0,duration:.42,ease:'power2.out'},49.5+i*0.13));
-tl.fromTo('#s8cta',{opacity:0,y:22},{opacity:1,y:0,duration:.7,ease:'power3.out'},50.6);
-tl.to('#stage',{opacity:0,duration:0.5,ease:'power2.in'},52.5);
+{ const [a] = SC.s8;
+  tl.fromTo('#s8mark',{scale:.5,opacity:0},{scale:1,opacity:1,duration:.8,ease:'back.out(1.8)'},a+0.15);
+  tl.fromTo('#s8name',{opacity:0,y:28},{opacity:1,y:0,duration:.7,ease:'power3.out'},a+0.55);
+  qa('#s8flow .pill').forEach((p,i)=>tl.fromTo(p,{opacity:0,y:20},{opacity:1,y:0,duration:.42,ease:'power2.out'},a+1.0+i*0.12));
+  tl.fromTo('#s8cta',{opacity:0,y:22},{opacity:1,y:0,duration:.7,ease:'power3.out'},a+1.95);
+  tl.to('#stage',{opacity:0,duration:0.55,ease:'power2.in'},DUR-0.6);
+}
 
-/* ---------- deterministic seek API for the frame renderer ---------- */
+/* deterministic seek API for the frame renderer */
 window.FILM = {
   duration: DUR,
   seek(t){ tl.pause(); tl.time(Math.min(t, DUR)); setCaption(t); },
-  captions: CAPTIONS
+  captions: CAPTIONS,
+  segments: SEG,
+  narration: NARRATION,
 };
 window.FILM_READY = true;
 </script>

@@ -1,43 +1,43 @@
 1
-00:00:00,600 --> 00:00:05,400
-Every week new businesses open. By the time Google lists them, someone else has already built their website.
+00:00:00,600 --> 00:00:08,190
+Every week, new businesses open. By the time Google lists them, someone else built their website.
 
 2
-00:00:06,400 --> 00:00:10,200
+00:00:08,440 --> 00:00:11,230
 YEAN Leads finds them first.
 
 3
-00:00:11,000 --> 00:00:18,000
-One workspace shows every business you are tracking, what stage it is in, and the revenue you have won.
+00:00:11,480 --> 00:00:17,780
+One workspace. Every business you track, every stage, every naira won.
 
 4
-00:00:19,000 --> 00:00:23,200
-Three discovery sources feed it. Google Places sweeps the cities you target.
+00:00:18,030 --> 00:00:23,080
+Three sources feed it. Google Places sweeps the cities you target.
 
 5
-00:00:23,400 --> 00:00:26,200
-Paste an Instagram find the day it opens, months before Google catches up.
+00:00:23,330 --> 00:00:28,760
+Or paste an Instagram find the day it opens, long before Google.
 
 6
-00:00:27,200 --> 00:00:31,000
-Every website is audited automatically. DNS, SSL, redirects, mobile, and the platform it runs on.
+00:00:29,010 --> 00:00:36,390
+Every site is audited automatically. DNS, SSL, redirects, mobile.
 
 7
-00:00:31,200 --> 00:00:34,200
-Each lead is scored, so you only ever see the ones worth your time.
+00:00:36,640 --> 00:00:41,670
+Every lead is scored, so you only see the ones worth your time.
 
 8
-00:00:35,200 --> 00:00:39,000
-AI writes a pitch from the real problem it found on their site.
+00:00:41,920 --> 00:00:46,800
+AI writes the pitch from the real problem it found on their site.
 
 9
-00:00:39,200 --> 00:00:42,800
-Then it stops and waits for you. Nothing is ever sent without your approval.
+00:00:47,050 --> 00:00:51,240
+Then it waits. Nothing is sent without your approval.
 
 10
-00:00:43,600 --> 00:00:47,800
-Cold discovery becomes a closed deal, without the hours of manual hunting.
+00:00:51,490 --> 00:00:54,810
+Cold discovery becomes a closed deal.
 
 11
-00:00:48,600 --> 00:00:52,600
+00:00:55,600 --> 00:01:00,000
 YEAN Leads. Stop hunting. Start reviewing.

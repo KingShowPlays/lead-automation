@@ -1,86 +1,87 @@
 # YEAN Leads, voiceover script
 
-Total runtime: 53 seconds. Timecodes match the cuts in `film/index.html` and the
-subtitle file `captions.srt`, so a recorded read drops straight onto the video
-without re-timing.
+Runtime 61.5 seconds. These timecodes are the film's own: the picture was cut to
+the measured length of each spoken line, so a read at a natural pace lands on
+the edits without stretching. `captions.srt` and `generate-voiceover.mjs` are
+generated from the same table.
 
 ## Direction
 
-Read it like you are explaining the tool to a colleague who runs a web studio,
-not like you are selling. Calm, certain, unhurried. Let the silences sit; the
-picture is doing work in the gaps. Nigerian English or neutral English both fit.
-Drop your pitch slightly on the last three words of the film.
-
-Pace is roughly 145 words per minute. There is deliberate air between lines.
+Explain it to a colleague who runs a web studio. Calm, certain, unhurried, not
+selling. Let the gaps sit; the picture is working in them. Neutral or Nigerian
+English both suit the audience. Drop your pitch slightly on the last three words.
 
 ## Script
 
 | # | In | Out | Line |
 |---|----|-----|------|
-| 1 | 0:00.6 | 0:05.4 | Every week new businesses open. By the time Google lists them, someone else has already built their website. |
-| 2 | 0:06.4 | 0:10.2 | YEAN Leads finds them first. |
-| 3 | 0:11.0 | 0:18.0 | One workspace shows every business you are tracking, what stage it is in, and the revenue you have won. |
-| 4 | 0:19.0 | 0:23.2 | Three discovery sources feed it. Google Places sweeps the cities you target. |
-| 5 | 0:23.4 | 0:26.2 | Paste an Instagram find the day it opens, months before Google catches up. |
-| 6 | 0:27.2 | 0:31.0 | Every website is audited automatically. DNS, SSL, redirects, mobile, and the platform it runs on. |
-| 7 | 0:31.2 | 0:34.2 | Each lead is scored, so you only ever see the ones worth your time. |
-| 8 | 0:35.2 | 0:39.0 | AI writes a pitch from the real problem it found on their site. |
-| 9 | 0:39.2 | 0:42.8 | Then it stops and waits for you. Nothing is ever sent without your approval. |
-| 10 | 0:43.6 | 0:47.8 | Cold discovery becomes a closed deal, without the hours of manual hunting. |
-| 11 | 0:48.6 | 0:52.6 | YEAN Leads. Stop hunting. Start reviewing. |
+| 1 | 0:00.60 | 0:07.84 | Every week, new businesses open. By the time Google lists them, someone else built their website. |
+| 2 | 0:08.44 | 0:10.88 | YEAN Leads finds them first. |
+| 3 | 0:11.48 | 0:17.43 | One workspace. Every business you track, every stage, every naira won. |
+| 4 | 0:18.03 | 0:22.73 | Three sources feed it. Google Places sweeps the cities you target. |
+| 5 | 0:23.33 | 0:28.41 | Or paste an Instagram find the day it opens, long before Google. |
+| 6 | 0:29.01 | 0:36.04 | Every site is audited automatically. DNS, SSL, redirects, mobile. |
+| 7 | 0:36.64 | 0:41.32 | Every lead is scored, so you only see the ones worth your time. |
+| 8 | 0:41.92 | 0:46.45 | AI writes the pitch from the real problem it found on their site. |
+| 9 | 0:47.05 | 0:50.89 | Then it waits. Nothing is sent without your approval. |
+| 10 | 0:51.49 | 0:54.46 | Cold discovery becomes a closed deal. |
+| 11 | 0:55.60 | 0:59.65 | YEAN Leads. Stop hunting. Start reviewing. |
 
 ## Plain text, for pasting into a TTS tool
 
 ```
-Every week new businesses open. By the time Google lists them, someone else has already built their website.
+Every week, new businesses open. By the time Google lists them, someone else built their website.
 
 YEAN Leads finds them first.
 
-One workspace shows every business you are tracking, what stage it is in, and the revenue you have won.
+One workspace. Every business you track, every stage, every naira won.
 
-Three discovery sources feed it. Google Places sweeps the cities you target.
+Three sources feed it. Google Places sweeps the cities you target.
 
-Paste an Instagram find the day it opens, months before Google catches up.
+Or paste an Instagram find the day it opens, long before Google.
 
-Every website is audited automatically. DNS, SSL, redirects, mobile, and the platform it runs on.
+Every site is audited automatically. DNS, SSL, redirects, mobile.
 
-Each lead is scored, so you only ever see the ones worth your time.
+Every lead is scored, so you only see the ones worth your time.
 
-AI writes a pitch from the real problem it found on their site.
+AI writes the pitch from the real problem it found on their site.
 
-Then it stops and waits for you. Nothing is ever sent without your approval.
+Then it waits. Nothing is sent without your approval.
 
-Cold discovery becomes a closed deal, without the hours of manual hunting.
+Cold discovery becomes a closed deal.
 
 YEAN Leads. Stop hunting. Start reviewing.
 ```
 
-## Getting the audio onto the video
+## Producing the audio
 
-The film currently ships silent, with the narration burned in as on-screen
-subtitles, so it reads correctly muted (which is how most feeds play it).
-
-To add a spoken track, run:
+The shipped cut already carries a narration track generated by
+`generate-voiceover.mjs`. To regenerate, or to upgrade the voice:
 
 ```bash
 cd ad
-npm install                      # playwright + ffmpeg-static
-export ELEVENLABS_API_KEY=...    # or OPENAI_API_KEY
-node generate-voiceover.mjs      # writes dist/voiceover.mp3 and dist/yean-leads-60s-vo.mp4
+npm install
+node generate-voiceover.mjs                       # no key, Google TTS
+ELEVENLABS_API_KEY=... node generate-voiceover.mjs # best quality
+OPENAI_API_KEY=...     node generate-voiceover.mjs # also very good
 ```
 
-`generate-voiceover.mjs` synthesises each line separately, places it at the exact
-timecode above, and muxes the result. If you would rather record a human read,
-export the lines above, keep the same in-points, and run:
+Each line is synthesised on its own and placed at its exact in-point, so the
+read stays locked to the cut. A line that would overrun its slot is nudged
+faster with `atempo` (pitch preserved) rather than allowed to collide with the
+next one; at the current timings nothing needs stretching.
+
+To drop in a human read instead, keep the in-points above and mux directly:
 
 ```bash
 ffmpeg -i dist/yean-leads-60s.mp4 -i your-read.wav \
   -c:v copy -c:a aac -b:a 192k -shortest dist/yean-leads-60s-vo.mp4
 ```
 
-## A note on machine voices
+## On voice quality
 
-Anything from a low-end synthesiser (espeak, the stock OS voices) will sound
-robotic and undercut the film. If you are not recording a human, use ElevenLabs
-(Adam, Charlie, or Daniel read this copy well) or OpenAI `gpt-4o-mini-tts` with
-the `onyx` or `ash` voice. Both hold up at this length.
+The keyless Google backend is clear and correctly paced, and it is what the
+committed cut uses. For a published campaign, an ElevenLabs read (Adam, Charlie
+or Daniel suit this copy) or a human recording will sound warmer. Avoid the
+low-end system synthesisers such as espeak; they sound robotic and undercut the
+picture.

@@ -1,7 +1,10 @@
 node_modules/
 .frames/
-dist/preview.mp4
-dist/_preview.mp4
-dist/vo-parts/
-dist/voiceover.mp3
-dist/yean-leads-60s-vo.mp4
+
+# The repo root ignores dist/, which silently swallowed the rendered film too.
+# Re-include this folder, then keep only the finished cuts (previews, frame
+# scratch and the standalone voiceover stay out; all are regenerable).
+!dist/
+dist/*
+!dist/yean-leads-60s.mp4
+!dist/yean-leads-60s-vo.mp4
