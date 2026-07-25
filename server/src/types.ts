@@ -162,8 +162,17 @@ export interface ScoreBreakdownEntry {
 }
 
 export interface ScoreResult {
+  /** Kept as an alias of needScore so existing callers and stored docs still read. */
   score: number;
+  /** How badly the business needs a website. This alone decides qualification. */
+  needScore: number;
+  /** How easy the business is to contact. Ranks the queue, never gates it. */
+  reachScore: number;
+  /** Blended ordering value: need weighted at 0.75, reach at 0.25. */
+  priorityScore: number;
   breakdown: ScoreBreakdownEntry[];
+  needBreakdown: ScoreBreakdownEntry[];
+  reachBreakdown: ScoreBreakdownEntry[];
   qualified: boolean;
   threshold: number;
 }
@@ -177,33 +186,64 @@ export interface PitchResult {
 }
 
 export interface ScoringWeights {
+  // Need: the web presence itself.
   noWebsite: number;
   brokenWebsite: number;
   socialOrLinkInBioOnly: number;
   shopifyWebsite: number;
-  publicEmail: number;
-  whatsappAvailable: number;
-  recentlyOpened: number;
-  activeInstagram: number;
-  strongVisualBrand: number;
-  customWebsitePenalty: number;
   poorWebsite: number;
   menuPlatformOnly: number;
+  customWebsitePenalty: number;
+  // Need: timing and momentum.
+  openingSoon: number;
+  newBusiness: number;
+  emergingBusiness: number;
+  newToGoogle: number;
+  risingActivity: number;
+  wellRated: number;
+  strongVisualBrand: number;
+  // Reach: how we start the conversation. Never gates qualification.
+  publicEmail: number;
+  whatsappAvailable: number;
+  phoneOnly: number;
+  activeInstagram: number;
+  /** @deprecated superseded by openingSoon/newBusiness; kept so saved settings still load. */
+  recentlyOpened?: number;
 }
 
+/**
+ * Need weights are set so that the web presence alone can clear the default
+ * threshold of 50. A business with no website is the strongest lead this system
+ * can find, and it must never depend on a scraped email to qualify.
+ */
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
-  noWebsite: 40,
-  brokenWebsite: 40,
-  socialOrLinkInBioOnly: 30,
-  shopifyWebsite: 15,
-  publicEmail: 15,
-  whatsappAvailable: 10,
-  recentlyOpened: 25,
-  activeInstagram: 15,
-  strongVisualBrand: 10,
-  customWebsitePenalty: -30,
-  poorWebsite: 25,
-  menuPlatformOnly: 25,
+  // Need: web presence.
+  //
+  // Everything above the threshold of 50 is a business with no real website of
+  // its own: nothing, something broken, or a page on somebody else's platform.
+  // Each of those qualifies unaided, because each is the pitch. Below the line
+  // sit businesses that do have a site; they need a second signal, such as
+  // being newly opened, before they are worth a founder's morning.
+  noWebsite: 60,
+  brokenWebsite: 55,
+  socialOrLinkInBioOnly: 52,
+  menuPlatformOnly: 50,
+  poorWebsite: 35,
+  shopifyWebsite: 25,
+  customWebsitePenalty: -40,
+  // Need: timing and momentum.
+  openingSoon: 20,
+  newBusiness: 18,
+  emergingBusiness: 10,
+  newToGoogle: 12,
+  risingActivity: 10,
+  wellRated: 8,
+  strongVisualBrand: 8,
+  // Reach: contactability, scored separately and capped at 100.
+  publicEmail: 40,
+  whatsappAvailable: 30,
+  phoneOnly: 15,
+  activeInstagram: 25,
 };
 
 export const DEFAULT_CITIES = ["Lagos", "Abuja", "Port Harcourt"];

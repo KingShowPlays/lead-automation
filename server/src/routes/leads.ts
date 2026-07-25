@@ -155,16 +155,27 @@ leadsRouter.patch(
         {
           websiteType: lead.websiteType,
           hasEmail: Boolean(lead.email),
+          hasPhone: Boolean(lead.phoneNormalized ?? lead.phone),
           whatsappAvailable: lead.whatsappAvailable,
           openingSoon: lead.openingSoon,
           instagramActive: lead.instagramActive,
           strongVisualBrand: lead.strongVisualBrand,
+          maturity: lead.maturity as "NEW" | "EMERGING" | "ESTABLISHED" | "UNKNOWN",
+          rating: lead.rating,
+          userRatingCount: lead.userRatingCount,
+          ratingVelocity: lead.ratingVelocity,
+          newToGoogle: lead.newToGoogle,
         },
         settings.scoringWeights,
         settings.scoreThreshold,
       );
-      lead.leadScore = scoreResult.score;
+      lead.leadScore = scoreResult.needScore;
+      lead.needScore = scoreResult.needScore;
+      lead.reachScore = scoreResult.reachScore;
+      lead.priorityScore = scoreResult.priorityScore;
       lead.scoreBreakdown = scoreResult.breakdown;
+      lead.needBreakdown = scoreResult.needBreakdown;
+      lead.reachBreakdown = scoreResult.reachBreakdown;
       lead.scoredAt = new Date();
     }
 

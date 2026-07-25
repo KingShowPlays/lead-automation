@@ -102,8 +102,28 @@ export interface LeadDocument extends Document {
 
   // Scoring
   leadScore: number;
+  /** How badly they need a website. Qualification is decided on this alone. */
+  needScore: number;
+  /** How contactable they are. Ranks the queue; never gates qualification. */
+  reachScore: number;
+  /** Blended ordering value used to sort the approval queue. */
+  priorityScore: number;
   scoreBreakdown: ScoreBreakdownEntry[];
+  needBreakdown: ScoreBreakdownEntry[];
+  reachBreakdown: ScoreBreakdownEntry[];
   scoredAt?: Date;
+
+  // Recency and activity
+  /** NEW / EMERGING / ESTABLISHED, inferred from review count and opening status. */
+  maturity: string;
+  /** First time this business appeared in any of our scans. */
+  firstSeenAt?: Date;
+  /** True when it appeared in a sweep of an area we had already covered. */
+  newToGoogle: boolean;
+  /** Review count each time we saw it, so growth can be measured over scans. */
+  ratingObservations: Array<{ at: Date; count: number; rating?: number }>;
+  /** Reviews gained per week since first sight. Requires two or more scans. */
+  ratingVelocity?: number;
 
   // Pitch
   personalisedObservation?: string;
@@ -230,8 +250,22 @@ const leadSchema = new Schema<LeadDocument>(
     websiteCheck: websiteCheckSchema,
 
     leadScore: { type: Number, default: 0, index: true },
+    needScore: { type: Number, default: 0, index: true },
+    reachScore: { type: Number, default: 0 },
+    priorityScore: { type: Number, default: 0, index: true },
     scoreBreakdown: { type: [{ rule: String, points: Number, _id: false }], default: [] },
+    needBreakdown: { type: [{ rule: String, points: Number, _id: false }], default: [] },
+    reachBreakdown: { type: [{ rule: String, points: Number, _id: false }], default: [] },
     scoredAt: Date,
+
+    maturity: { type: String, default: "UNKNOWN", index: true },
+    firstSeenAt: Date,
+    newToGoogle: { type: Boolean, default: false, index: true },
+    ratingObservations: {
+      type: [{ at: Date, count: Number, rating: Number, _id: false }],
+      default: [],
+    },
+    ratingVelocity: Number,
 
     personalisedObservation: String,
     pitchSubject: String,

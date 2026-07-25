@@ -43,3 +43,4 @@ token.json
 
 # MongoDB local data
 data/db/
+state.json

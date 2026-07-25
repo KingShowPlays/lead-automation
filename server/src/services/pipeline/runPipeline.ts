@@ -4,7 +4,7 @@ import { getSettings } from "../../models/Settings.js";
 import { buildQueries, searchPlaces } from "../discovery/googlePlaces.js";
 import { checkWebsite } from "../websiteChecker/index.js";
 import { enrichLead } from "../enrichment/index.js";
-import { scoreLead } from "../scoring/leadScore.js";
+import { scoreLead, maturityOf } from "../scoring/leadScore.js";
 import { generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
@@ -133,7 +133,30 @@ export async function upsertIncomingLead(incoming: IncomingLead): Promise<Upsert
   if (incoming.email) or.push({ email: incoming.email.toLowerCase() });
   if (instagram) or.push({ instagramUsername: instagram });
   const existing = await Lead.findOne({ $or: or });
-  if (existing) return "duplicates";
+  if (existing) {
+    // Seen before: log the review count so growth can be measured across scans.
+    // Two sightings are enough to tell a business gaining customers from a
+    // dormant one, which no single snapshot of Places can show.
+    if (typeof incoming.userRatingCount === "number") {
+      const last = existing.ratingObservations?.[existing.ratingObservations.length - 1];
+      if (!last || last.count !== incoming.userRatingCount) {
+        existing.ratingObservations.push({
+          at: new Date(),
+          count: incoming.userRatingCount,
+          rating: incoming.rating,
+        });
+        const first = existing.ratingObservations[0];
+        const weeks = (Date.now() - new Date(first.at).getTime()) / (7 * 24 * 3600 * 1000);
+        if (weeks >= 0.5) {
+          existing.ratingVelocity = Math.max(0, (incoming.userRatingCount - first.count) / weeks);
+        }
+        existing.rating = incoming.rating ?? existing.rating;
+        existing.userRatingCount = incoming.userRatingCount;
+        await existing.save();
+      }
+    }
+    return "duplicates";
+  }
 
   // Never even store leads that match the suppression list.
   const sup = await isSuppressed({
@@ -145,6 +168,16 @@ export async function upsertIncomingLead(incoming: IncomingLead): Promise<Upsert
   if (sup.suppressed) return "suppressed";
 
   const now = new Date();
+
+  // Have we swept this city and category before? If so, a business appearing
+  // now is new to Google since our last look, which is exactly the moment to
+  // reach it: before it starts shopping for an agency.
+  const sweptBefore = await Lead.exists({
+    city: incoming.city,
+    category: incoming.category,
+    createdAt: { $lt: new Date(now.getTime() - 60 * 60 * 1000) },
+  });
+
   const contactSources: Array<{ field: string; value: string; source: string; sourceUrl?: string; collectedAt: Date }> = [];
   const provideProvenance = incoming.discoverySource === "manual_import" ? "manual" : incoming.discoverySource;
   if (incoming.email) contactSources.push({ field: "email", value: incoming.email, source: provideProvenance, sourceUrl: incoming.sourceUrl, collectedAt: now });
@@ -174,6 +207,13 @@ export async function upsertIncomingLead(incoming: IncomingLead): Promise<Upsert
     searchQuery: incoming.searchQuery,
     discoverySource: incoming.discoverySource,
     contactSources,
+    firstSeenAt: now,
+    newToGoogle: Boolean(sweptBefore),
+    maturity: maturityOf(incoming.userRatingCount, incoming.openingSoon),
+    ratingObservations:
+      typeof incoming.userRatingCount === "number"
+        ? [{ at: now, count: incoming.userRatingCount, rating: incoming.rating }]
+        : [],
     pipelineStage: "DISCOVERED",
   });
   return "created";
@@ -231,20 +271,32 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
   }
 
   // 3) Scoring
+  lead.maturity = maturityOf(lead.userRatingCount, lead.openingSoon);
   const scoreResult = scoreLead(
     {
       websiteType: lead.websiteType,
       hasEmail: Boolean(lead.email),
+      hasPhone: Boolean(lead.phoneNormalized ?? lead.phone),
       whatsappAvailable: lead.whatsappAvailable,
       openingSoon: lead.openingSoon,
       instagramActive: lead.instagramActive,
       strongVisualBrand: lead.strongVisualBrand,
+      maturity: lead.maturity as ReturnType<typeof maturityOf>,
+      rating: lead.rating,
+      userRatingCount: lead.userRatingCount,
+      ratingVelocity: lead.ratingVelocity,
+      newToGoogle: lead.newToGoogle,
     },
     settings.scoringWeights,
     settings.scoreThreshold,
   );
-  lead.leadScore = scoreResult.score;
+  lead.leadScore = scoreResult.needScore;
+  lead.needScore = scoreResult.needScore;
+  lead.reachScore = scoreResult.reachScore;
+  lead.priorityScore = scoreResult.priorityScore;
   lead.scoreBreakdown = scoreResult.breakdown;
+  lead.needBreakdown = scoreResult.needBreakdown;
+  lead.reachBreakdown = scoreResult.reachBreakdown;
   lead.scoredAt = new Date();
   lead.pipelineStage = scoreResult.qualified ? "QUALIFIED" : "DISQUALIFIED";
 
