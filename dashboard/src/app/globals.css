@@ -188,7 +188,16 @@ a:active {
 /* Shared page hierarchy */
 .page-shell {
   width: 100%;
+  min-width: 0;
   padding-bottom: 5rem;
+}
+
+.page-shell > *,
+.panel > *,
+.glass-card > *,
+.toolbar > *,
+.page-header > * {
+  min-width: 0;
 }
 
 .page-header {
@@ -360,6 +369,8 @@ a:active {
 
 .segmented-control {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
   border: 1px solid rgb(var(--line));
   background: rgb(var(--surface));
 }
@@ -418,6 +429,7 @@ a:active {
 .data-table td {
   padding: 0.9rem 1rem;
   border-bottom: 1px solid rgb(var(--line) / 0.65);
+  overflow-wrap: anywhere;
   vertical-align: middle;
 }
 
@@ -645,6 +657,19 @@ a:active {
     margin-top: 1rem;
   }
 
+  .toolbar > input,
+  .toolbar > select,
+  .toolbar > button,
+  .toolbar > div {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  .toolbar .segmented-control {
+    width: auto !important;
+  }
+
   .desktop-table {
     display: none;
   }
@@ -655,6 +680,13 @@ a:active {
 
   .panel {
     padding: 1rem;
+  }
+
+  pre,
+  code {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 }
 

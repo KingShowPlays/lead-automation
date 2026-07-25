@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   RiDashboardLine,
+  RiBarChartBoxLine,
   RiInboxArchiveLine,
   RiContactsBook2Line,
   RiForbidLine,
@@ -19,6 +20,7 @@ import { api } from "@/lib/api";
 
 const NAV = [
   { href: "/", label: "Overview", icon: RiDashboardLine },
+  { href: "/analytics", label: "Analytics", icon: RiBarChartBoxLine },
   { href: "/queue", label: "Approval queue", icon: RiInboxArchiveLine },
   { href: "/leads", label: "All leads", icon: RiContactsBook2Line },
   { href: "/suppression", label: "Suppression", icon: RiForbidLine },

@@ -42,6 +42,7 @@ leadsRouter.get(
         createdWithinDays: z.coerce.number().int().min(1).max(3650).optional(),
         minRating: z.coerce.number().optional(),
         maxReviews: z.coerce.number().int().optional(),
+        minRatingVelocity: z.coerce.number().min(0).optional(),
         search: z.string().optional(),
         sort: z
           .enum([
@@ -63,10 +64,21 @@ leadsRouter.get(
     if (q.category) filter.category = q.category;
     if (q.channel) filter.outreachChannel = q.channel;
     if (q.minScore != null || q.maxScore != null) {
-      filter.needScore = {
+      const scoreRange = {
         ...(q.minScore != null ? { $gte: q.minScore } : {}),
         ...(q.maxScore != null ? { $lte: q.maxScore } : {}),
       };
+      filter.$and = [
+        ...((filter.$and as unknown[]) ?? []),
+        {
+          $or: [
+            { needScore: scoreRange },
+            // Existing deployments can contain leads written before need and
+            // reach were split. Keep those filterable until the rescore runs.
+            { needScore: { $exists: false }, leadScore: scoreRange },
+          ],
+        },
+      ];
     }
     if (q.minReach != null) filter.reachScore = { $gte: q.minReach };
     if (q.maturity) filter.maturity = { $in: q.maturity.split(",") };
@@ -82,6 +94,7 @@ leadsRouter.get(
     }
     if (q.minRating != null) filter.rating = { $gte: q.minRating };
     if (q.maxReviews != null) filter.userRatingCount = { $lte: q.maxReviews };
+    if (q.minRatingVelocity != null) filter.ratingVelocity = { $gte: q.minRatingVelocity };
 
     // How we can reach them. "any" and "none" answer the two questions an
     // operator actually asks: who can I contact today, and who needs digging.

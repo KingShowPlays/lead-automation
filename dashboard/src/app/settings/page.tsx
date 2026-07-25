@@ -23,19 +23,49 @@ import {
 import { api } from "@/lib/api";
 import type { Settings, TestResult } from "@/lib/types";
 
-const WEIGHT_LABELS: Record<string, string> = {
+const NEED_WEIGHT_LABELS: Record<string, string> = {
   noWebsite: "No website",
   brokenWebsite: "Broken website",
   socialOrLinkInBioOnly: "Social / link-in-bio only",
   menuPlatformOnly: "Menu platform only",
   poorWebsite: "Poor website",
   shopifyWebsite: "Shopify website",
+  customWebsitePenalty: "Existing custom website (penalty)",
+  openingSoon: "Opening soon",
+  newBusiness: "New business",
+  emergingBusiness: "Emerging business",
+  newToGoogle: "New to Google since prior sweep",
+  risingActivity: "Rising review activity",
+  wellRated: "Well rated with social proof",
+  strongVisualBrand: "Strong visual brand",
+};
+
+const REACH_WEIGHT_LABELS: Record<string, string> = {
   publicEmail: "Public email available",
   whatsappAvailable: "WhatsApp available",
-  recentlyOpened: "Recently opened or opening soon",
+  phoneOnly: "Phone available (not WhatsApp)",
   activeInstagram: "Active Instagram",
-  strongVisualBrand: "Strong visual brand",
-  customWebsitePenalty: "Existing custom website (penalty)",
+};
+
+const RECOMMENDED_SCORING_WEIGHTS: Record<string, number> = {
+  noWebsite: 60,
+  brokenWebsite: 55,
+  socialOrLinkInBioOnly: 52,
+  menuPlatformOnly: 50,
+  poorWebsite: 35,
+  shopifyWebsite: 25,
+  customWebsitePenalty: -40,
+  openingSoon: 20,
+  newBusiness: 18,
+  emergingBusiness: 10,
+  newToGoogle: 12,
+  risingActivity: 10,
+  wellRated: 8,
+  strongVisualBrand: 8,
+  publicEmail: 40,
+  whatsappAvailable: 30,
+  phoneOnly: 15,
+  activeInstagram: 25,
 };
 
 const AI_PROVIDERS = [
@@ -62,8 +92,11 @@ type PartialIntegrations = {
 /** Fills any missing nested integration fields so inputs stay controlled. */
 function withDefaults(s: Settings): Settings {
   const i = (s.integrations ?? {}) as PartialIntegrations;
+  const storedWeights = { ...(s.scoringWeights ?? {}) };
+  delete storedWeights.recentlyOpened;
   return {
     ...s,
+    scoringWeights: { ...RECOMMENDED_SCORING_WEIGHTS, ...storedWeights },
     integrations: {
       googlePlacesApiKey: i.googlePlacesApiKey ?? "",
       ai: { provider: "AUTO", apiKey: "", model: "", baseUrl: "", ...i.ai },
@@ -539,7 +572,7 @@ export default function SettingsPage() {
         <section className="glass-card min-h-[340px] space-y-5 p-6">
           <SectionTitle icon={<RiPlugLine className="h-5 w-5" />} title="Outreach guardrails" />
           <NumberField
-            label="Qualification threshold (score)"
+            label="Qualification threshold (need score)"
             value={settings.scoreThreshold}
             onChange={(v) => upd({ scoreThreshold: v })}
           />
@@ -559,24 +592,37 @@ export default function SettingsPage() {
 
       {/* Scoring weights */}
       <section className="glass-card mt-6 p-6">
-        <h2 className="font-heading text-lg font-bold">Scoring weights</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Leads scoring at least {settings.scoreThreshold} enter the approval queue.
-        </p>
-        <div className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-          {Object.entries(WEIGHT_LABELS).map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between gap-4">
-              <span className="text-sm text-slate-600 dark:text-slate-300">{label}</span>
-              <input
-                type="number"
-                className="input !w-24 text-center font-heading font-bold tabular-nums"
-                value={settings.scoringWeights[key] ?? 0}
-                onChange={(e) =>
-                  upd({ scoringWeights: { ...settings.scoringWeights, [key]: Number(e.target.value) } })
-                }
-              />
-            </div>
-          ))}
+        <div className="section-heading">
+          <div>
+            <h2 className="font-heading text-lg font-bold">Scoring weights</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+              Need alone decides whether a lead clears {settings.scoreThreshold}. Reach never disqualifies a business;
+              it only helps order qualified opportunities.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost shrink-0"
+            onClick={() => upd({ scoringWeights: { ...RECOMMENDED_SCORING_WEIGHTS } })}
+          >
+            <RiRestartLine className="h-4 w-4" /> Recommended defaults
+          </button>
+        </div>
+        <div className="mt-5 grid gap-6 xl:grid-cols-2">
+          <WeightGroup
+            title="Business need"
+            description="Website gap, timing, momentum, and buying signals."
+            labels={NEED_WEIGHT_LABELS}
+            values={settings.scoringWeights}
+            onChange={(key, value) => upd({ scoringWeights: { ...settings.scoringWeights, [key]: value } })}
+          />
+          <WeightGroup
+            title="Contact reach"
+            description="How easily outreach can begin; this never gates qualification."
+            labels={REACH_WEIGHT_LABELS}
+            values={settings.scoringWeights}
+            onChange={(key, value) => upd({ scoringWeights: { ...settings.scoringWeights, [key]: value } })}
+          />
         </div>
       </section>
 
@@ -602,6 +648,41 @@ function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string })
       </span>
       {title}
     </h2>
+  );
+}
+
+function WeightGroup({
+  title,
+  description,
+  labels,
+  values,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  labels: Record<string, string>;
+  values: Record<string, number>;
+  onChange: (key: string, value: number) => void;
+}) {
+  return (
+    <div className="border border-slate-200 p-4 dark:border-slate-800">
+      <h3 className="font-heading text-base font-extrabold">{title}</h3>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p>
+      <div className="mt-4 space-y-3">
+        {Object.entries(labels).map(([key, label]) => (
+          <label key={key} className="flex min-w-0 items-center justify-between gap-3">
+            <span className="min-w-0 text-sm text-slate-600 dark:text-slate-300">{label}</span>
+            <input
+              type="number"
+              className="input !w-24 shrink-0 text-center font-heading font-bold tabular-nums"
+              value={values[key] ?? 0}
+              aria-label={`${label} weight`}
+              onChange={(event) => onChange(key, Number(event.target.value))}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 

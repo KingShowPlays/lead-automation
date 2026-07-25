@@ -185,9 +185,9 @@ export function ImportPanel({ open, onClose, onDone }: { open: boolean; onClose:
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 dark:border-slate-800">
           <p className="text-xs text-slate-500">Duplicates and suppression matches are handled automatically.</p>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={busy} className="btn-ghost">Cancel</button>
-            <button type="button" onClick={submit} disabled={busy || rows.length === 0} className="btn-cta">
+          <div className="flex w-full gap-2 sm:w-auto">
+            <button type="button" onClick={onClose} disabled={busy} className="btn-ghost flex-1 sm:flex-none">Cancel</button>
+            <button type="button" onClick={submit} disabled={busy || rows.length === 0} className="btn-cta flex-1 sm:flex-none">
               {busy ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
               {busy ? "Importing…" : `Import ${rows.length || ""}`.trim()}
             </button>

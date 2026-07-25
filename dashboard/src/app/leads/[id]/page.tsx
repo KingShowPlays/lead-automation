@@ -27,7 +27,13 @@ import {
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import type { Lead, OutreachLogEntry } from "@/lib/types";
-import { ScoreBadge, StagePill, WebsiteTypeBadge } from "@/components/badges";
+import {
+  IntelligenceScores,
+  MaturityBadge,
+  SourceBadge,
+  StagePill,
+  WebsiteTypeBadge,
+} from "@/components/badges";
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -142,8 +148,12 @@ export default function LeadDetailPage() {
           <Link href="/leads" className="mb-3 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-600">
             <RiArrowLeftLine /> All leads
           </Link>
-          <div className="flex min-w-0 items-start gap-4">
-            <ScoreBadge score={lead.leadScore} />
+          <div className="flex min-w-0 flex-col items-start gap-4 sm:flex-row">
+            <IntelligenceScores
+              priority={lead.priorityScore}
+              need={lead.needScore ?? lead.leadScore}
+              reach={lead.reachScore}
+            />
             <div className="min-w-0">
               <p className="page-kicker">Lead workspace</p>
               <h1 className="page-title truncate">{lead.businessName}</h1>
@@ -154,6 +164,8 @@ export default function LeadDetailPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <StagePill stage={lead.pipelineStage} />
                 <WebsiteTypeBadge type={lead.websiteType} />
+                <MaturityBadge maturity={lead.maturity} newToGoogle={lead.newToGoogle} />
+                <SourceBadge source={lead.discoverySource} />
                 {lead.optedOut && <span className="status-badge border-rose-500 bg-rose-500/5 text-rose-500">Do not contact</span>}
               </div>
             </div>
@@ -183,6 +195,50 @@ export default function LeadDetailPage() {
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-12">
         <main className="space-y-6 xl:col-span-8">
+          <section className="panel accent-brand border-t-4">
+            <div className="section-heading">
+              <div>
+                <h2 className="section-title">Commercial intelligence</h2>
+                <p className="section-description">
+                  Need decides qualification. Reach only controls how high this lead appears in the work queue.
+                </p>
+              </div>
+              <IntelligenceScores
+                priority={lead.priorityScore}
+                need={lead.needScore ?? lead.leadScore}
+                reach={lead.reachScore}
+                compact
+              />
+            </div>
+
+            <div className="grid grid-cols-2 border border-slate-200 sm:grid-cols-4 dark:border-slate-800">
+              <AuditMetric label="Maturity" value={(lead.maturity ?? "UNKNOWN").toLowerCase()} />
+              <AuditMetric label="Rating" value={lead.rating != null ? `${lead.rating.toFixed(1)}★` : "—"} />
+              <AuditMetric label="Reviews" value={(lead.userRatingCount ?? 0).toLocaleString()} />
+              <AuditMetric label="Reviews/week" value={lead.ratingVelocity != null ? lead.ratingVelocity.toFixed(1) : "—"} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {lead.newToGoogle && <span className="status-badge text-cyan-600">New to Google</span>}
+              {lead.openingSoon && <span className="status-badge text-cta-500">Opening soon</span>}
+              {(lead.ratingVelocity ?? 0) >= 2 && <span className="status-badge text-emerald-600">Rising review activity</span>}
+              <SourceBadge source={lead.discoverySource} />
+              {lead.firstSeenAt && (
+                <span className="status-badge text-slate-500">
+                  First seen {new Date(lead.firstSeenAt).toLocaleDateString("en-NG")}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <ScoreBreakdown
+                title="Why they need the work"
+                items={lead.needBreakdown?.length ? lead.needBreakdown : lead.scoreBreakdown ?? []}
+              />
+              <ScoreBreakdown title="How to reach them" items={lead.reachBreakdown ?? []} />
+            </div>
+          </section>
+
           <section className="panel accent-brand border-t-4">
             <div className="section-heading">
               <div>
@@ -228,7 +284,7 @@ export default function LeadDetailPage() {
                   checked={form.instagramActive}
                   onChange={(event) => setForm({ ...form, instagramActive: event.target.checked })}
                 />
-                <span>Active Instagram <span className="text-emerald-600">+15</span></span>
+                <span>Active Instagram <span className="text-slate-400">improves reach</span></span>
               </label>
               <label className="flex cursor-pointer items-center gap-3 border border-slate-300 p-3 text-sm font-semibold dark:border-slate-700">
                 <input
@@ -237,7 +293,7 @@ export default function LeadDetailPage() {
                   checked={form.strongVisualBrand}
                   onChange={(event) => setForm({ ...form, strongVisualBrand: event.target.checked })}
                 />
-                <span>Strong visual brand <span className="text-emerald-600">+10</span></span>
+                <span>Strong visual brand <span className="text-slate-400">improves need</span></span>
               </label>
             </div>
 
@@ -321,7 +377,7 @@ export default function LeadDetailPage() {
                   <p className="section-description">NDPA traceability for every contact field collected.</p>
                 </div>
               </div>
-              <div className="table-shell !mt-0">
+              <div className="desktop-table table-shell !mt-0">
                 <table className="data-table min-w-[620px]">
                   <thead><tr><th>Field</th><th>Value</th><th>Source</th><th>Collected</th></tr></thead>
                   <tbody>
@@ -339,6 +395,22 @@ export default function LeadDetailPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mobile-record-list !mt-0">
+                {lead.contactSources.map((source, index) => (
+                  <article key={`${source.field}-${source.value}-${index}`} className="mobile-record">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="mobile-record-label">{source.field}</span>
+                        <p className="break-all text-sm font-bold">{source.value}</p>
+                      </div>
+                      <span className="status-badge max-w-32 truncate text-slate-500">{source.source}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">
+                      Collected {new Date(source.collectedAt).toLocaleDateString("en-NG")}
+                    </p>
+                  </article>
+                ))}
               </div>
             </section>
           )}
@@ -438,6 +510,36 @@ function AuditMetric({ label, value }: { label: string; value: string }) {
     <div className="border-b border-r border-slate-200 p-3 last:border-r-0 dark:border-slate-800">
       <span className="mobile-record-label">{label}</span>
       <span className="block truncate font-heading text-base font-extrabold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function ScoreBreakdown({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ rule: string; points: number }>;
+}) {
+  return (
+    <div>
+      <p className="label">{title}</p>
+      {items.length === 0 ? (
+        <p className="border border-dashed border-slate-300 p-4 text-sm text-slate-400 dark:border-slate-700">
+          No contributing signals recorded.
+        </p>
+      ) : (
+        <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
+          {items.map((item) => (
+            <li key={item.rule} className="flex justify-between gap-3 py-2">
+              <span className="text-slate-500 dark:text-slate-400">{item.rule}</span>
+              <strong className={`tabular-nums ${item.points >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                {item.points > 0 ? `+${item.points}` : item.points}
+              </strong>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

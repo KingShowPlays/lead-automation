@@ -35,6 +35,13 @@ export type OutreachStatus =
   | "CONVERTED"
   | "DO_NOT_CONTACT";
 
+export type LeadMaturity = "NEW" | "EMERGING" | "ESTABLISHED" | "UNKNOWN";
+export type DiscoverySource = "google_places" | "manual_import" | "directory" | string;
+export interface ScoreBreakdownEntry {
+  rule: string;
+  points: number;
+}
+
 export interface Lead {
   _id: string;
   businessName: string;
@@ -45,6 +52,13 @@ export interface Lead {
   googleMapsUrl?: string;
   businessStatus?: string;
   openingSoon: boolean;
+  discoverySource: DiscoverySource;
+  discoveredAt?: string;
+  maturity: LeadMaturity;
+  firstSeenAt?: string;
+  newToGoogle: boolean;
+  ratingObservations: Array<{ at: string; count: number; rating?: number }>;
+  ratingVelocity?: number;
   rating?: number;
   userRatingCount?: number;
   phone?: string;
@@ -72,7 +86,12 @@ export interface Lead {
     checkedAt?: string;
   };
   leadScore: number;
-  scoreBreakdown: Array<{ rule: string; points: number }>;
+  needScore: number;
+  reachScore: number;
+  priorityScore: number;
+  scoreBreakdown: ScoreBreakdownEntry[];
+  needBreakdown: ScoreBreakdownEntry[];
+  reachBreakdown: ScoreBreakdownEntry[];
   personalisedObservation?: string;
   pitchSubject?: string;
   pitchMessage?: string;
@@ -140,6 +159,45 @@ export interface Stats {
     gmail: boolean;
     authEnabled: boolean;
   };
+}
+
+export interface AnalyticsStats {
+  window: {
+    days: number | "all";
+    label: string;
+    from: string | null;
+    to: string;
+  };
+  qualificationThreshold: number;
+  totals: {
+    total: number;
+    qualified: number;
+    newBusinesses: number;
+    emergingBusinesses: number;
+    newToGoogle: number;
+    openingSoon: number;
+    risingActivity: number;
+    contactableAny: number;
+    contactableNone: number;
+    contacted: number;
+    interested: number;
+    converted: number;
+  };
+  revenue: { totalDealValue: number; convertedDeals: number };
+  contactability: Record<"email" | "phone" | "whatsapp" | "instagram" | "any" | "none", number>;
+  scores: {
+    averageNeed: number;
+    averageReach: number;
+    averagePriority: number;
+    needBuckets: Record<string, number>;
+    reachBuckets: Record<string, number>;
+  };
+  byMaturity: Record<string, number>;
+  bySource: Record<string, number>;
+  byCity: Record<string, number>;
+  byCategory: Record<string, number>;
+  byWebsiteType: Record<string, number>;
+  recentRuns: Stats["recentRuns"];
 }
 
 export interface SuppressionEntry {

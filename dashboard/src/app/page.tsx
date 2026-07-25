@@ -15,6 +15,7 @@ import {
   RiErrorWarningLine,
   RiArrowRightLine,
   RiTimeLine,
+  RiBarChartBoxLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/motion";
@@ -139,6 +140,9 @@ export default function OverviewPage() {
           </p>
         </div>
         <div className="page-actions">
+          <Link href="/analytics" className="btn-ghost">
+            <RiBarChartBoxLine className="h-4 w-4" /> Analytics
+          </Link>
           <Link href="/leads" className="btn-ghost">
             View all leads <RiArrowRightLine className="h-4 w-4" />
           </Link>

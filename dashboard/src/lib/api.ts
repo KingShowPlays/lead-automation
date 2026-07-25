@@ -1,6 +1,7 @@
 import type {
   ImportResult,
   ImportRow,
+  AnalyticsStats,
   IntegrationStatus,
   Lead,
   OutreachLogEntry,
@@ -41,6 +42,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   stats: () => req<Stats>("/api/stats"),
+  analytics: (days: number | "all") => req<AnalyticsStats>(`/api/stats/analytics?days=${days}`),
 
   leads: (params: Record<string, string | number | undefined>) => {
     const qs = new URLSearchParams();

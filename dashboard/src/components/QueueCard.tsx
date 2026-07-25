@@ -20,7 +20,7 @@ import {
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import type { Lead } from "@/lib/types";
-import { ScoreBadge, WebsiteTypeBadge } from "./badges";
+import { IntelligenceScores, MaturityBadge, SourceBadge, WebsiteTypeBadge } from "./badges";
 
 export function QueueCard({
   lead: initial,
@@ -109,14 +109,15 @@ export function QueueCard({
 
   const isApproved = lead.approval.status === "APPROVED";
   const emailChannel = lead.outreachChannel === "EMAIL" && Boolean(lead.email);
-  const accent = lead.leadScore >= 70 ? "border-l-emerald-500" : lead.leadScore >= 50 ? "border-l-cta-500" : "border-l-slate-500";
+  const priority = lead.priorityScore ?? Math.round((lead.needScore ?? lead.leadScore) * 0.75 + (lead.reachScore ?? 0) * 0.25);
+  const accent = priority >= 70 ? "border-l-emerald-500" : priority >= 50 ? "border-l-cta-500" : "border-l-slate-500";
   const issueCount = lead.websiteCheck?.issues?.length ?? 0;
 
   return (
     <article className={`queue-card glass-card overflow-hidden border-l-4 ${accent}`}>
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-800">
-        <div className="flex min-w-0 items-start gap-3.5">
-          <ScoreBadge score={lead.leadScore} />
+        <div className="flex min-w-0 flex-col items-start gap-3.5 sm:flex-row">
+          <IntelligenceScores priority={priority} need={lead.needScore ?? lead.leadScore} reach={lead.reachScore} />
           <div className="min-w-0">
             {position && total && (
               <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
@@ -135,6 +136,8 @@ export function QueueCard({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <WebsiteTypeBadge type={lead.websiteType} />
+          <MaturityBadge maturity={lead.maturity} newToGoogle={lead.newToGoogle} />
+          <SourceBadge source={lead.discoverySource} />
           {isApproved && <span className="status-badge text-emerald-600">Approved{lead.gmailDraftId ? " · draft ready" : ""}</span>}
         </div>
       </div>
@@ -172,20 +175,34 @@ export function QueueCard({
           <div className="mt-5 grid grid-cols-2 border border-slate-200 text-xs dark:border-slate-800">
             <AuditMetric label="HTTP" value={lead.websiteCheck?.httpStatus?.toString() ?? "—"} />
             <AuditMetric label="Response" value={lead.websiteCheck?.responseTimeMs ? `${lead.websiteCheck.responseTimeMs}ms` : "—"} />
-            <AuditMetric label="Issues" value={issueCount.toString()} />
-            <AuditMetric label="Contact attempts" value={lead.timesContacted.toString()} />
+            <AuditMetric label="Reviews" value={(lead.userRatingCount ?? 0).toString()} />
+            <AuditMetric label="Growth/week" value={lead.ratingVelocity != null ? lead.ratingVelocity.toFixed(1) : "—"} />
           </div>
 
-          {lead.scoreBreakdown.length > 0 && (
+          {(lead.needBreakdown?.length ?? 0) > 0 && (
             <div className="mt-5">
-              <p className="label">Score breakdown</p>
+              <p className="label">Why this lead needs the work</p>
               <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
-                {lead.scoreBreakdown.map((item) => (
+                {lead.needBreakdown.map((item) => (
                   <li key={item.rule} className="flex justify-between gap-3 py-2">
                     <span className="text-slate-500 dark:text-slate-400">{item.rule}</span>
                     <span className={`font-extrabold tabular-nums ${item.points > 0 ? "text-emerald-600" : "text-rose-500"}`}>
                       {item.points > 0 ? `+${item.points}` : item.points}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(lead.reachBreakdown?.length ?? 0) > 0 && (
+            <div className="mt-5">
+              <p className="label">How to reach them</p>
+              <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
+                {lead.reachBreakdown.map((item) => (
+                  <li key={item.rule} className="flex justify-between gap-3 py-2">
+                    <span className="text-slate-500 dark:text-slate-400">{item.rule}</span>
+                    <span className="font-extrabold tabular-nums text-brand-600">+{item.points}</span>
                   </li>
                 ))}
               </ul>

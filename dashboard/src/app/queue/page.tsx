@@ -8,6 +8,7 @@ import { QueueCard } from "@/components/QueueCard";
 
 export default function QueuePage() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [channel, setChannel] = useState<"ALL" | "EMAIL" | "INSTAGRAM_MANUAL">("ALL");
   const [refreshing, setRefreshing] = useState(false);
@@ -19,13 +20,14 @@ export default function QueuePage() {
       .leads({
         approvalStatus: "PENDING",
         stage: "PENDING_APPROVAL,APPROVED",
-        sort: "-score",
-        limit: 50,
+        sort: "-priority",
+        limit: 100,
         channel: channel === "ALL" ? undefined : channel,
       })
       .then((result) => {
         if (cancelled) return;
         setLeads(result.items);
+        setTotal(result.total);
         setError(null);
       })
       .catch((e: Error) => {
@@ -41,9 +43,10 @@ export default function QueuePage() {
 
   useEffect(load, [load]);
 
-  const remove = (id: string) => setLeads((previous) => previous?.filter((lead) => lead._id !== id) ?? null);
-  const emailCount = leads?.filter((lead) => lead.outreachChannel === "EMAIL").length ?? 0;
-  const instagramCount = leads?.filter((lead) => lead.outreachChannel === "INSTAGRAM_MANUAL").length ?? 0;
+  const remove = (id: string) => {
+    setLeads((previous) => previous?.filter((lead) => lead._id !== id) ?? null);
+    setTotal((value) => Math.max(value - 1, 0));
+  };
 
   return (
     <div className="page-shell">
@@ -57,7 +60,7 @@ export default function QueuePage() {
         </div>
         <div className="page-actions">
           <span className="status-badge text-brand-600">
-            <RiInboxArchiveLine className="mr-1 h-4 w-4" /> {leads?.length ?? 0} waiting
+            <RiInboxArchiveLine className="mr-1 h-4 w-4" /> {total.toLocaleString()} waiting
           </span>
           <button type="button" onClick={() => load()} className="btn-ghost" disabled={refreshing}>
             <RiRefreshLine className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -67,19 +70,19 @@ export default function QueuePage() {
       </header>
 
       <div className="toolbar justify-between">
-        <div className="segmented-control" aria-label="Filter approval queue by channel">
+        <div className="segmented-control max-w-full overflow-x-auto" aria-label="Filter approval queue by channel">
           <button type="button" aria-pressed={channel === "ALL"} onClick={() => setChannel("ALL")}>
-            All {leads ? `(${leads.length})` : ""}
+            All
           </button>
           <button type="button" aria-pressed={channel === "EMAIL"} onClick={() => setChannel("EMAIL")}>
-            <RiMailLine className="mr-1 inline h-3.5 w-3.5" /> Email {channel === "ALL" && leads ? `(${emailCount})` : ""}
+            <RiMailLine className="mr-1 inline h-3.5 w-3.5" /> Email
           </button>
           <button type="button" aria-pressed={channel === "INSTAGRAM_MANUAL"} onClick={() => setChannel("INSTAGRAM_MANUAL")}>
-            <RiInstagramLine className="mr-1 inline h-3.5 w-3.5" /> Instagram {channel === "ALL" && leads ? `(${instagramCount})` : ""}
+            <RiInstagramLine className="mr-1 inline h-3.5 w-3.5" /> Instagram
           </button>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Highest lead score appears first · edits save on approval
+          Highest commercial priority appears first · need qualifies, reach ranks
         </p>
       </div>
 

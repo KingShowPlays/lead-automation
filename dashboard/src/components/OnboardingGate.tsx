@@ -156,12 +156,12 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-2 sm:p-4 backdrop-blur-md">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 220, damping: 24 }}
-        className="glass-card relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden"
+        className="glass-card relative flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden sm:max-h-[92vh]"
       >
         {/* progress bar */}
         <div className="h-1 w-full bg-slate-200/60 dark:bg-slate-800">
@@ -203,7 +203,7 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* sticky footer nav */}
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200/60 p-4 dark:border-slate-800/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/60 p-3 sm:p-4 dark:border-slate-800/60">
           <button
             onClick={() => go(STEPS[Math.max(0, idx - 1)])}
             disabled={idx === 0 || busy}
@@ -212,7 +212,7 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
             <RiArrowLeftLine className="h-4 w-4" /> Back
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="order-last flex w-full items-center justify-center gap-1.5 sm:order-none sm:w-auto">
             {STEPS.map((s, i) => (
               <span
                 key={s}
@@ -578,7 +578,7 @@ function TagRow({
       <div className="flex gap-2">
         <input
           ref={inputRef}
-          className="input"
+          className="input min-w-0 flex-1"
           value={val}
           placeholder={placeholder}
           onChange={(e) => setVal(e.target.value)}

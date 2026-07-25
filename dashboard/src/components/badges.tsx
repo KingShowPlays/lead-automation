@@ -1,4 +1,4 @@
-import type { WebsiteType } from "@/lib/types";
+import type { LeadMaturity, WebsiteType } from "@/lib/types";
 
 const WEBSITE_TYPE_STYLES: Record<WebsiteType, { label: string; cls: string }> = {
   NO_WEBSITE: { label: "No website", cls: "border-rose-500 bg-rose-500/5 text-rose-600 dark:text-rose-400" },
@@ -32,6 +32,69 @@ export function ScoreBadge({ score }: { score: number }) {
       {score}
     </span>
   );
+}
+
+export function IntelligenceScores({
+  priority,
+  need,
+  reach,
+  compact = false,
+}: {
+  priority?: number;
+  need?: number;
+  reach?: number;
+  compact?: boolean;
+}) {
+  const resolvedNeed = need ?? 0;
+  const resolvedReach = reach ?? 0;
+  const resolvedPriority = priority ?? Math.round(resolvedNeed * 0.75 + resolvedReach * 0.25);
+  const priorityClass =
+    resolvedPriority >= 70
+      ? "border-emerald-600 bg-emerald-600 text-white"
+      : resolvedPriority >= 50
+        ? "border-cta-500 bg-cta-500 text-white"
+        : "border-slate-500 bg-slate-600 text-white";
+  return (
+    <div className={`inline-flex shrink-0 items-stretch border border-slate-300 dark:border-slate-700 ${compact ? "text-[10px]" : "text-xs"}`}>
+      <span
+        className={`flex min-w-12 flex-col items-center justify-center px-2 py-1.5 font-heading font-extrabold tabular-nums ${priorityClass}`}
+        title="Priority blends business need (75%) and contact reach (25%)"
+      >
+        <span className="text-[8px] uppercase tracking-wider opacity-80">Priority</span>
+        <span className={compact ? "text-sm" : "text-base"}>{resolvedPriority}</span>
+      </span>
+      <span className="flex min-w-11 flex-col items-center justify-center bg-white px-2 py-1 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+        <span className="text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Need</span>
+        <strong className="font-heading tabular-nums">{resolvedNeed}</strong>
+      </span>
+      <span className="flex min-w-11 flex-col items-center justify-center border-l border-slate-300 bg-white px-2 py-1 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+        <span className="text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Reach</span>
+        <strong className="font-heading tabular-nums">{resolvedReach}</strong>
+      </span>
+    </div>
+  );
+}
+
+export function MaturityBadge({ maturity, newToGoogle = false }: { maturity?: LeadMaturity; newToGoogle?: boolean }) {
+  const value = maturity ?? "UNKNOWN";
+  const cls =
+    value === "NEW"
+      ? "border-cyan-500 bg-cyan-500/5 text-cyan-700 dark:text-cyan-400"
+      : value === "EMERGING"
+        ? "border-violet-500 bg-violet-500/5 text-violet-700 dark:text-violet-400"
+        : value === "ESTABLISHED"
+          ? "border-slate-400 bg-slate-500/5 text-slate-600 dark:text-slate-300"
+          : "border-slate-300 text-slate-400 dark:border-slate-700";
+  return (
+    <span className={`status-badge ${cls}`}>
+      {newToGoogle ? "New to Google" : value === "UNKNOWN" ? "Age unknown" : value.toLowerCase()}
+    </span>
+  );
+}
+
+export function SourceBadge({ source }: { source?: string }) {
+  const label = (source || "unknown").replaceAll("_", " ");
+  return <span className="status-badge border-slate-400 text-slate-500 capitalize dark:text-slate-300">{label}</span>;
 }
 
 export function StagePill({ stage }: { stage: string }) {

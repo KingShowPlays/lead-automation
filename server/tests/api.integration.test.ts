@@ -117,19 +117,27 @@ describe("settings API", () => {
     expect(res.status).toBe(200);
     expect(res.body.settings.cities).toContain("Lagos");
     expect(res.body.settings.scoreThreshold).toBe(50);
-    expect(res.body.settings.scoringWeights.noWebsite).toBe(40);
+    expect(res.body.settings.scoringWeights.noWebsite).toBe(60);
+    expect(res.body.settings.scoringWeights.newBusiness).toBe(18);
+    expect(res.body.settings.scoringWeights.phoneOnly).toBe(15);
   });
 
   it("updates cities, threshold and weights", async () => {
     const res = await request(app)
       .put("/api/settings")
-      .send({ cities: ["Lagos", "Enugu"], scoreThreshold: 45, scoringWeights: { shopifyWebsite: 20 } });
+      .send({
+        cities: ["Lagos", "Enugu"],
+        scoreThreshold: 45,
+        scoringWeights: { shopifyWebsite: 20, newBusiness: 21, phoneOnly: 17 },
+      });
     expect(res.status).toBe(200);
     expect(res.body.settings.cities).toEqual(["Lagos", "Enugu"]);
     expect(res.body.settings.scoreThreshold).toBe(45);
     expect(res.body.settings.scoringWeights.shopifyWebsite).toBe(20);
+    expect(res.body.settings.scoringWeights.newBusiness).toBe(21);
+    expect(res.body.settings.scoringWeights.phoneOnly).toBe(17);
     // untouched weights preserved
-    expect(res.body.settings.scoringWeights.noWebsite).toBe(40);
+    expect(res.body.settings.scoringWeights.noWebsite).toBe(60);
 
     // reset for later tests
     await request(app).post("/api/settings/reset");
@@ -144,11 +152,11 @@ describe("settings API", () => {
 describe("lead lifecycle", () => {
   it("full offline pipeline: NO_WEBSITE lead → scored → pitched → pending approval", async () => {
     const lead = await makeLead({ businessName: "Amara Kitchen", businessNameNormalized: "amara kitchen", category: "restaurants", city: "Lagos" });
-    // no websiteUrl → NO_WEBSITE (+40), phone is mobile → whatsapp (+10) = 50 ≥ 50
+    // Need qualifies on its own; WhatsApp only improves reach and priority.
     const outcome = await processLead(lead);
 
     expect(outcome.websiteType).toBe("NO_WEBSITE");
-    expect(outcome.score).toBe(50);
+    expect(outcome.score).toBe(60);
     expect(outcome.qualified).toBe(true);
     expect(outcome.stage).toBe("PENDING_APPROVAL");
 
@@ -165,22 +173,56 @@ describe("lead lifecycle", () => {
     const res = await request(app).get("/api/leads?stage=PENDING_APPROVAL&minScore=40");
     expect(res.status).toBe(200);
     expect(res.body.total).toBeGreaterThanOrEqual(1);
-    expect(res.body.items.every((l: { leadScore: number }) => l.leadScore >= 40)).toBe(true);
+    expect(res.body.items.every((l: { needScore: number }) => l.needScore >= 40)).toBe(true);
 
     const search = await request(app).get("/api/leads?search=amara");
     expect(search.body.items.some((l: { businessName: string }) => l.businessName === "Amara Kitchen")).toBe(true);
+
+    const rising = await makeLead({
+      businessName: "Rising Bracket [Cafe]",
+      businessNameNormalized: "rising bracket cafe",
+      phone: undefined,
+      maturity: "NEW",
+      ratingVelocity: 3,
+      needScore: 70,
+      leadScore: 70,
+      reachScore: 0,
+      priorityScore: 53,
+    });
+    const advanced = await request(app).get("/api/leads?maturity=NEW&contactable=none&minRatingVelocity=2");
+    expect(advanced.status).toBe(200);
+    expect(advanced.body.items.some((lead: { _id: string }) => lead._id === String(rising._id))).toBe(true);
+    const escaped = await request(app).get("/api/leads").query({ search: "[Cafe]" });
+    expect(escaped.status).toBe(200);
+    expect(escaped.body.items.some((lead: { _id: string }) => lead._id === String(rising._id))).toBe(true);
+
+    const legacy = await Lead.collection.insertOne({
+      businessName: "Legacy Score",
+      businessNameNormalized: "legacy score",
+      category: "restaurants",
+      city: "Lagos",
+      googlePlaceId: `legacy-${Math.random().toString(36).slice(2)}`,
+      leadScore: 64,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const legacyFilter = await request(app).get("/api/leads?minScore=60");
+    expect(legacyFilter.status).toBe(200);
+    expect(legacyFilter.body.items.some((lead: { _id: string }) => lead._id === String(legacy.insertedId))).toBe(true);
   });
 
   it("PATCH edits contact info, records provenance, and rescores", async () => {
     const lead = await makeLead({ businessName: "Patch Target", businessNameNormalized: "patch target" });
-    await processLead(lead); // NO_WEBSITE +40, whatsapp +10 = 50
+    await processLead(lead);
 
     const res = await request(app)
       .patch(`/api/leads/${lead._id}`)
       .send({ email: "owner@patchtarget.ng", instagramActive: true });
     expect(res.status).toBe(200);
-    // +40 (no site) +10 (wa) +15 (email) +15 (active IG) = 80
-    expect(res.body.lead.leadScore).toBe(80);
+    // Contact fields improve reach without changing qualifying need.
+    expect(res.body.lead.needScore).toBe(60);
+    expect(res.body.lead.reachScore).toBe(95);
+    expect(res.body.lead.priorityScore).toBe(69);
     expect(res.body.lead.contactSources.some((s: { source: string; field: string }) => s.source === "manual" && s.field === "email")).toBe(true);
   });
 
@@ -410,6 +452,22 @@ describe("stats", () => {
     expect(res.body.byStage).toBeTypeOf("object");
     expect(res.body.byWebsiteType).toBeTypeOf("object");
     expect(res.body.integrations).toHaveProperty("gmail");
+  });
+
+  it("returns quality, recency, contactability and source analytics", async () => {
+    const res = await request(app).get("/api/stats/analytics?days=all");
+    expect(res.status).toBe(200);
+    expect(res.body.window.label).toBe("All time");
+    expect(res.body.qualificationThreshold).toBeTypeOf("number");
+    expect(res.body.totals.total).toBeGreaterThan(0);
+    expect(res.body.totals).toHaveProperty("qualified");
+    expect(res.body.contactability).toHaveProperty("none");
+    expect(res.body.contactability).toHaveProperty("phone");
+    expect(res.body.totals.converted).toBeLessThanOrEqual(res.body.totals.interested);
+    expect(res.body.totals.interested).toBeLessThanOrEqual(res.body.totals.contacted);
+    expect(res.body.scores.needBuckets).toHaveProperty("50–74");
+    expect(res.body.byMaturity).toBeTypeOf("object");
+    expect(res.body.bySource).toBeTypeOf("object");
   });
 });
 
