@@ -28,8 +28,27 @@ leadsRouter.get(
         category: z.string().optional(),
         channel: z.string().optional(),
         minScore: z.coerce.number().optional(),
+        maxScore: z.coerce.number().optional(),
+        minReach: z.coerce.number().optional(),
+        maturity: z.string().optional(),
+        source: z.string().optional(),
+        /** "email", "phone", "whatsapp", "instagram", "any", "none" */
+        contactable: z.string().optional(),
+        newToGoogle: z.enum(["true", "false"]).optional(),
+        openingSoon: z.enum(["true", "false"]).optional(),
+        hasPitch: z.enum(["true", "false"]).optional(),
+        optedOut: z.enum(["true", "false"]).optional(),
+        /** Discovered within the last N days. */
+        createdWithinDays: z.coerce.number().int().min(1).max(3650).optional(),
+        minRating: z.coerce.number().optional(),
+        maxReviews: z.coerce.number().int().optional(),
         search: z.string().optional(),
-        sort: z.enum(["score", "-score", "created", "-created", "name"]).default("-score"),
+        sort: z
+          .enum([
+            "score", "-score", "priority", "-priority", "reach", "-reach",
+            "created", "-created", "name", "-name", "reviews", "-reviews",
+          ])
+          .default("-priority"),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(200).default(25),
       })
@@ -43,21 +62,92 @@ leadsRouter.get(
     if (q.city) filter.city = q.city;
     if (q.category) filter.category = q.category;
     if (q.channel) filter.outreachChannel = q.channel;
-    if (q.minScore != null) filter.leadScore = { $gte: q.minScore };
+    if (q.minScore != null || q.maxScore != null) {
+      filter.needScore = {
+        ...(q.minScore != null ? { $gte: q.minScore } : {}),
+        ...(q.maxScore != null ? { $lte: q.maxScore } : {}),
+      };
+    }
+    if (q.minReach != null) filter.reachScore = { $gte: q.minReach };
+    if (q.maturity) filter.maturity = { $in: q.maturity.split(",") };
+    if (q.source) filter.discoverySource = { $in: q.source.split(",") };
+    if (q.newToGoogle) filter.newToGoogle = q.newToGoogle === "true";
+    if (q.openingSoon) filter.openingSoon = q.openingSoon === "true";
+    if (q.hasPitch) filter.pitchMessage = q.hasPitch === "true" ? { $nin: [null, ""] } : { $in: [null, ""] };
+    // Opted-out leads are hidden unless asked for: they are not actionable and
+    // burying live leads under them is how a queue stops being trusted.
+    filter.optedOut = q.optedOut === "true" ? true : q.optedOut === "false" ? false : { $ne: true };
+    if (q.createdWithinDays != null) {
+      filter.createdAt = { $gte: new Date(Date.now() - q.createdWithinDays * 86400000) };
+    }
+    if (q.minRating != null) filter.rating = { $gte: q.minRating };
+    if (q.maxReviews != null) filter.userRatingCount = { $lte: q.maxReviews };
+
+    // How we can reach them. "any" and "none" answer the two questions an
+    // operator actually asks: who can I contact today, and who needs digging.
+    const reachable = [
+      { email: { $nin: [null, ""] } },
+      { phoneNormalized: { $nin: [null, ""] } },
+      { instagramUsername: { $nin: [null, ""] } },
+    ];
+    switch (q.contactable) {
+      case "email":
+        filter.email = { $nin: [null, ""] };
+        break;
+      case "phone":
+        filter.phoneNormalized = { $nin: [null, ""] };
+        break;
+      case "whatsapp":
+        filter.whatsappAvailable = true;
+        break;
+      case "instagram":
+        filter.instagramUsername = { $nin: [null, ""] };
+        break;
+      case "any":
+        filter.$and = [...((filter.$and as unknown[]) ?? []), { $or: reachable }];
+        break;
+      case "none":
+        filter.email = { $in: [null, ""] };
+        filter.phoneNormalized = { $in: [null, ""] };
+        filter.instagramUsername = { $in: [null, ""] };
+        break;
+      default:
+        break;
+    }
+
     if (q.search) {
-      filter.$or = [
-        { businessName: { $regex: q.search, $options: "i" } },
-        { email: { $regex: q.search, $options: "i" } },
-        { instagramUsername: { $regex: q.search, $options: "i" } },
+      // Escaped: a business name with a bracket in it must not become a regex.
+      const term = q.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = { $regex: term, $options: "i" };
+      filter.$and = [
+        ...((filter.$and as unknown[]) ?? []),
+        {
+          $or: [
+            { businessName: rx },
+            { email: rx },
+            { instagramUsername: rx },
+            { city: rx },
+            { category: rx },
+            { phoneNormalized: rx },
+            { websiteUrl: rx },
+          ],
+        },
       ];
     }
 
     const sortMap: Record<string, Record<string, 1 | -1>> = {
-      score: { leadScore: 1 },
-      "-score": { leadScore: -1 },
+      score: { needScore: 1 },
+      "-score": { needScore: -1 },
+      priority: { priorityScore: 1 },
+      "-priority": { priorityScore: -1 },
+      reach: { reachScore: 1 },
+      "-reach": { reachScore: -1 },
       created: { createdAt: 1 },
       "-created": { createdAt: -1 },
       name: { businessName: 1 },
+      "-name": { businessName: -1 },
+      reviews: { userRatingCount: 1 },
+      "-reviews": { userRatingCount: -1 },
     };
 
     const [items, total] = await Promise.all([
