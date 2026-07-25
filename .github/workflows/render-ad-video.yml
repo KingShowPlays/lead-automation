@@ -1,0 +1,83 @@
+name: Render corrected ad video
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ad/fix-currency-layout.mjs"
+      - "ad/audit-currency-overflow.mjs"
+      - ".github/workflows/render-ad-video.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ad/package-lock.json
+
+      - name: Install film dependencies
+        working-directory: ad
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: ad
+        run: npx playwright install --with-deps chromium
+
+      - name: Apply currency layout fix
+        run: node ad/fix-currency-layout.mjs
+
+      - name: Audit currency containment
+        run: node ad/audit-currency-overflow.mjs
+
+      - name: Run full alignment audit
+        run: node ad/audit-alignment.mjs
+
+      - name: Render corrected silent cut
+        working-directory: ad
+        run: node render.mjs
+
+      - name: Preserve narration in corrected cut
+        shell: bash
+        run: |
+          FFMPEG=$(node -e "console.log(require('./ad/node_modules/ffmpeg-static'))")
+          "$FFMPEG" -y \
+            -i ad/dist/yean-leads-60s.mp4 \
+            -i ad/dist/yean-leads-60s-vo.mp4 \
+            -map 0:v:0 -map 1:a:0 \
+            -c:v copy -c:a copy -shortest \
+            ad/dist/yean-leads-60s-vo-fixed.mp4
+          mv ad/dist/yean-leads-60s-vo-fixed.mp4 ad/dist/yean-leads-60s-vo.mp4
+
+      - name: Commit corrected source and finished cuts
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ad/film/index.html ad/dist/yean-leads-60s.mp4 ad/dist/yean-leads-60s-vo.mp4
+          if git diff --cached --quiet; then
+            echo "Nothing changed"
+          else
+            git commit -m "Fix currency overflow and regenerate product film"
+            git push origin main
+          fi
+
+      - name: Upload corrected videos
+        uses: actions/upload-artifact@v4
+        with:
+          name: yean-leads-corrected-video
+          path: |
+            ad/dist/yean-leads-60s-vo.mp4
+            ad/dist/yean-leads-60s.mp4
+          retention-days: 14
