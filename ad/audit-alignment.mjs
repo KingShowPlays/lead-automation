@@ -44,6 +44,14 @@ const CENTRED = [
   ["#c3 .ic svg", "#c3 .ic", "sources icon 3"],
 ];
 
+/**
+ * Boxes that draw a border or a background, and so must visibly contain what is
+ * written inside them. A counter that ends in seven digits is the usual way
+ * this breaks: the card is sized for the number it starts at, not the one it
+ * animates to.
+ */
+const CONTAINERS = ".metric, .callout, .card, .chip, .pill, .frow, .tick, #s5chip";
+
 /** Elements that must stay inside the canvas at the sampled time. */
 const IN_CANVAS = [
   "#s1wrap", "#s2mark", "#s2name", "#s2tag", "#s2sub", "#auditCard", "#scoreWrap", "#funnel", "#rev",
@@ -102,6 +110,62 @@ for (const { t, scene, note } of SAMPLES) {
       bad(`${label}: ${sel} outside canvas (x=${r.x.toFixed(0)} y=${r.y.toFixed(0)} w=${r.w.toFixed(0)} h=${r.h.toFixed(0)})`);
     else ok();
   }
+
+  // text must stay inside the box that is drawn around it
+  const spills = await page.evaluate((sel) => {
+    const found = [];
+    for (const box of document.querySelectorAll(sel)) {
+      const br = box.getBoundingClientRect();
+      if (br.width === 0 || br.height === 0) continue;
+      let op = 1;
+      for (let n = box; n && n !== document.body; n = n.parentElement) op *= Number(getComputedStyle(n).opacity);
+      if (op <= 0.05) continue;
+
+      const cs = getComputedStyle(box);
+      const inner = {
+        left: br.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth),
+        right: br.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth),
+        top: br.top + parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth),
+        bottom: br.bottom - parseFloat(cs.paddingBottom) - parseFloat(cs.borderBottomWidth),
+      };
+      const name = box.id ? `#${box.id}` : `.${String(box.className).split(/\s+/)[0]}`;
+
+      for (const el of box.querySelectorAll("*")) {
+        if (el.children.length > 0) continue;
+        const text = (el.textContent || "").trim();
+        if (!text) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0) continue;
+        const over = Math.max(inner.left - r.left, r.right - inner.right, inner.top - r.top, r.bottom - inner.bottom);
+        if (over > 1.5) {
+          found.push(`${name}: "${text.slice(0, 22)}" spills ${over.toFixed(0)}px outside the card`);
+          continue;
+        }
+
+        // Fitting is not the same as looking like it fits. A figure that runs
+        // from one border to the other reads as overflowing even when it is
+        // inside by a pixel, especially beside a card holding two digits. Hold
+        // the headline value to most of the width, not all of it.
+        if (el.closest(".v") === null) continue;
+        const innerWidth = inner.right - inner.left;
+        if (innerWidth <= 0) continue;
+        // Measure the glyphs, not the block around them: a full-width block
+        // holding the word "12" is not tight.
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const ink = range.getBoundingClientRect().width;
+        range.detach?.();
+        if (ink / innerWidth > 0.88) {
+          found.push(
+            `${name}: "${text.slice(0, 22)}" fills ${Math.round((ink / innerWidth) * 100)}% of the card, too tight to read as contained`,
+          );
+        }
+      }
+    }
+    return found;
+  }, CONTAINERS);
+  for (const s of spills) bad(`${label}: ${s}`);
+  if (spills.length === 0) ok();
 
   // overlay/frame collisions that would look like a layout bug
   const overlaps = [

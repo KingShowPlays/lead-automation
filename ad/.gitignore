@@ -8,3 +8,4 @@ node_modules/
 dist/*
 !dist/yean-leads-60s.mp4
 !dist/yean-leads-60s-vo.mp4
+!dist/yean-leads-60s-music.mp4

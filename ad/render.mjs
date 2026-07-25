@@ -7,7 +7,7 @@
  * screenshots each frame, then encodes to H.264 with ffmpeg.
  *
  * Usage:
- *   node ad/render.mjs [--fps 30] [--scale 1] [--out ad/dist/yean-leads.mp4]
+ *   node ad/render.mjs [--fps 30] [--scale 1] [--out ad/dist/yean-leads-60s.mp4]
  *
  * Requires playwright and ffmpeg-static, resolved from either this folder or
  * a global install (see ad/README.md).
@@ -30,7 +30,7 @@ const arg = (k, d) => {
 
 const FPS = Number(arg("fps", 30));
 const SCALE = Number(arg("scale", 1));
-const OUT = path.resolve(__dirname, "..", arg("out", "ad/dist/yean-leads.mp4"));
+const OUT = path.resolve(__dirname, "..", arg("out", "ad/dist/yean-leads-60s.mp4"));
 const FRAME_DIR = path.resolve(__dirname, ".frames");
 const FILM = pathToFileURL(path.join(__dirname, "film", "index.html")).href;
 

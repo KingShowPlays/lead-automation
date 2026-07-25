@@ -5,7 +5,9 @@
   "scripts": {
     "render": "node render.mjs",
     "render:preview": "node render.mjs --fps 12 --out ad/dist/preview.mp4",
-    "voiceover": "node generate-voiceover.mjs"
+    "voiceover": "node generate-voiceover.mjs",
+    "soundtrack": "node compose-soundtrack.mjs",
+    "audit": "node audit-alignment.mjs"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",

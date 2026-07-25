@@ -107,12 +107,13 @@
     background:rgba(225,29,72,.16);color:#fb7185;border:1px solid rgba(225,29,72,.45);}
 
   /* metric strip */
-  .metric{position:absolute;width:352px;padding:28px 34px;background:rgba(9,15,30,.93);border:1px solid var(--line);
+  /* Cards are sized for their widest value, the naira figure, not for the
+     shortest, and with room to spare around it. A seven figure counter that
+     technically fits but runs from one border to the other still reads as
+     overflowing, especially next to a sibling card holding two digits. */
+  .metric{position:absolute;width:440px;padding:30px 36px;background:rgba(9,15,30,.93);border:1px solid var(--line);
     border-top:4px solid var(--emerald);backdrop-filter:blur(8px);will-change:transform,opacity;text-align:left;}
-  .metric .v{font-family:'SpaceG';font-size:62px;font-weight:700;letter-spacing:-.03em;}
-  /* Currency values use a tighter, fixed-width treatment so every frame stays inside its card. */
-  #m3 .v{font-size:46px;letter-spacing:-.045em;line-height:1;white-space:nowrap;overflow:hidden;}
-  #rev .v{font-size:44px!important;letter-spacing:-.055em;line-height:1;white-space:nowrap;overflow:hidden;}
+  .metric .v{font-family:'SpaceG';font-size:52px;font-weight:700;letter-spacing:-.03em;white-space:nowrap;}
   .metric .l{font-size:17px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
 
   /* funnel */
@@ -234,8 +235,8 @@
       <div class="frow"><div class="top"><span>Interested</span><span class="mono" data-n="2">0</span></div><div class="track"><div class="fill" data-w="17"></div></div></div>
       <div class="frow"><div class="top"><span>Converted</span><span class="mono" data-n="2">0</span></div><div class="track"><div class="fill" data-w="17"></div></div></div>
     </div>
-    <div class="metric" id="rev" style="right:150px;top:330px;border-top-color:var(--cta);padding:44px 54px">
-      <div class="v mono" style="font-size:86px"><span id="revv">0</span></div>
+    <div class="metric" id="rev" style="right:150px;top:330px;width:520px;border-top-color:var(--cta);padding:44px 56px">
+      <div class="v mono" style="font-size:58px"><span id="revv">0</span></div>
       <div class="l">Revenue won</div>
       <div style="margin-top:22px;font-size:23px;color:#86efac">2 deals closed from the queue</div>
     </div>
