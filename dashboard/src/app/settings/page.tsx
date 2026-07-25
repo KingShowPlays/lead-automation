@@ -96,10 +96,11 @@ function withDefaults(s: Settings): Settings {
   delete storedWeights.recentlyOpened;
   return {
     ...s,
+    placesRequestsPerMinute: s.placesRequestsPerMinute ?? 60,
     scoringWeights: { ...RECOMMENDED_SCORING_WEIGHTS, ...storedWeights },
     integrations: {
       googlePlacesApiKey: i.googlePlacesApiKey ?? "",
-      ai: { provider: "AUTO", apiKey: "", model: "", baseUrl: "", ...i.ai },
+      ai: { provider: "AUTO", apiKey: "", model: "", requestsPerMinute: 30, baseUrl: "", ...i.ai },
       email: {
         provider: "AUTO",
         fromAddress: "",
@@ -153,6 +154,7 @@ export default function SettingsPage() {
         dailyEmailCap: settings.dailyEmailCap,
         discoveryEnabled: settings.discoveryEnabled,
         maxResultsPerQuery: settings.maxResultsPerQuery,
+        placesRequestsPerMinute: settings.placesRequestsPerMinute,
         integrations: settings.integrations,
       });
       setSettings(withDefaults(r.settings));
@@ -256,6 +258,17 @@ export default function SettingsPage() {
             value={settings.maxResultsPerQuery}
             onChange={(v) => upd({ maxResultsPerQuery: v })}
           />
+          <NumberField
+            label="Places requests per minute"
+            value={settings.placesRequestsPerMinute}
+            onChange={(v) => upd({ placesRequestsPerMinute: v })}
+            min={1}
+            max={120}
+          />
+          <p className="text-xs leading-relaxed text-slate-400">
+            60 is the balanced default. A 429 pauses all Places traffic, automatically halves the pace, and sustained
+            successful requests gradually restore it.
+          </p>
         </section>
 
         {/* AI */}
@@ -281,6 +294,15 @@ export default function SettingsPage() {
             onChange={(v) => updIntegrations({ ai: { ...settings.integrations.ai, model: v } })}
             placeholder="Blank uses the provider default"
           />
+          <NumberField
+            label="AI requests per minute"
+            value={settings.integrations.ai.requestsPerMinute}
+            onChange={(v) =>
+              updIntegrations({ ai: { ...settings.integrations.ai, requestsPerMinute: v } })
+            }
+            min={1}
+            max={300}
+          />
           <TextField
             label="Base URL (custom / override)"
             value={settings.integrations.ai.baseUrl}
@@ -289,8 +311,8 @@ export default function SettingsPage() {
           />
           <TestButton label="Test AI" run={api.testAi} beforeTest={save} />
           <p className="text-xs leading-relaxed text-slate-400">
-            If the provider fails or is off, the engine falls back to its built-in template pitches, so the queue never
-            stalls.
+            AI calls are globally paced and automatically slow down after a 429. If the provider still fails after
+            retries, the engine uses a template and reports the fallback in pipeline progress.
           </p>
         </section>
       </div>
@@ -919,12 +941,26 @@ function TagEditor({
   );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-sm text-slate-600 dark:text-slate-300">{label}</span>
       <input
         type="number"
+        min={min}
+        max={max}
         className="input !w-24 text-center font-heading font-bold tabular-nums"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}

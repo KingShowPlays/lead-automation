@@ -183,6 +183,8 @@ export interface PitchResult {
   observation: string;
   provider: string;
   model: string;
+  /** Present when a configured AI provider failed and a template was used. */
+  fallbackReason?: string;
 }
 
 export interface ScoringWeights {

@@ -1,5 +1,7 @@
 import { getAiRuntime, type ResolvedAi } from "../../config/runtime.js";
 import { logger } from "../../utils/logger.js";
+import { sleep } from "../../utils/async.js";
+import { AdaptiveRateLimiter, parseRetryAfterMs } from "../../utils/rateLimiter.js";
 import { truncate } from "../../utils/text.js";
 import type { LeadDocument } from "../../models/Lead.js";
 import type { PitchResult } from "../../types.js";
@@ -113,6 +115,69 @@ interface AiCallResult {
   model: string;
 }
 
+const AI_RETRY_DELAYS_MS = [5_000, 10_000, 20_000];
+const MIN_AI_RATE_LIMIT_COOLDOWN_MS = 60_000;
+const AI_RATE_LIMIT_CIRCUIT_MS = 5 * 60_000;
+const AI_AUTH_CIRCUIT_MS = 10 * 60_000;
+const AI_TRANSIENT_CIRCUIT_MS = 2 * 60_000;
+const aiLimiters = new Map<string, AdaptiveRateLimiter>();
+const aiCircuits = new Map<string, { until: number; reason: string }>();
+
+export class AiProviderError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterMs: number | null,
+  ) {
+    super(message);
+    this.name = "AiProviderError";
+  }
+}
+
+export interface AiRequestLimiter {
+  waitTurn(requestsPerMinute: number): Promise<void>;
+  blockFor(ms: number): void;
+  recordSuccess?: () => void;
+}
+
+function runtimeKey(ai: ResolvedAi): string {
+  // Include the credential in the in-memory identity so correcting/rotating a
+  // bad key immediately gets a fresh limiter and circuit. The key is never
+  // logged or persisted.
+  return `${ai.provider}\u0000${ai.baseUrl}\u0000${ai.model}\u0000${ai.apiKey}`;
+}
+
+function limiterFor(ai: ResolvedAi): AdaptiveRateLimiter {
+  const key = runtimeKey(ai);
+  let limiter = aiLimiters.get(key);
+  if (!limiter) {
+    limiter = new AdaptiveRateLimiter();
+    aiLimiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+function activeCircuitFor(ai: ResolvedAi): { until: number; reason: string } | null {
+  const key = runtimeKey(ai);
+  const circuit = aiCircuits.get(key);
+  if (!circuit) return null;
+  if (circuit.until > Date.now()) return circuit;
+  aiCircuits.delete(key);
+  return null;
+}
+
+function openCircuit(ai: ResolvedAi, err: unknown): void {
+  const providerError = err instanceof AiProviderError ? err : null;
+  const duration =
+    providerError?.status === 429
+      ? Math.max(AI_RATE_LIMIT_CIRCUIT_MS, providerError.retryAfterMs ?? 0)
+      : providerError && providerError.status >= 400 && providerError.status < 500
+        ? AI_AUTH_CIRCUIT_MS
+        : AI_TRANSIENT_CIRCUIT_MS;
+  const reason = err instanceof Error ? err.message : String(err);
+  aiCircuits.set(runtimeKey(ai), { until: Date.now() + duration, reason });
+}
+
 /**
  * Chat-completions call for any OpenAI-compatible endpoint. Covers OpenAI
  * itself, NVIDIA NIM, and custom providers (Groq/Together/Ollama/vLLM).
@@ -142,7 +207,11 @@ export async function callOpenAICompatible(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`${ai.provider} error ${res.status}: ${body.slice(0, 300)}`);
+    throw new AiProviderError(
+      `${ai.provider} error ${res.status}: ${body.slice(0, 300)}`,
+      res.status,
+      parseRetryAfterMs(res.headers),
+    );
   }
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const text = data.choices?.[0]?.message?.content;
@@ -172,7 +241,11 @@ export async function callAnthropic(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`anthropic error ${res.status}: ${body.slice(0, 300)}`);
+    throw new AiProviderError(
+      `anthropic error ${res.status}: ${body.slice(0, 300)}`,
+      res.status,
+      parseRetryAfterMs(res.headers),
+    );
   }
   const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
   const text = data.content?.find((c) => c.type === "text")?.text;
@@ -278,6 +351,43 @@ export async function runAiPrompt(prompt: string, ai: ResolvedAi, fetchImpl: typ
   throw new Error("No AI provider is configured");
 }
 
+export async function runAiPromptWithRetry(
+  prompt: string,
+  ai: ResolvedAi,
+  opts: {
+    fetchImpl?: typeof fetch;
+    limiter?: AiRequestLimiter;
+    sleepImpl?: (ms: number) => Promise<void>;
+    random?: () => number;
+  } = {},
+): Promise<AiCallResult> {
+  const limiter = opts.limiter ?? limiterFor(ai);
+  const sleepImpl = opts.sleepImpl ?? sleep;
+  const random = opts.random ?? Math.random;
+
+  for (let attempt = 0; attempt <= AI_RETRY_DELAYS_MS.length; attempt++) {
+    await limiter.waitTurn(ai.requestsPerMinute);
+    try {
+      const result = await runAiPrompt(prompt, ai, opts.fetchImpl);
+      limiter.recordSuccess?.();
+      return result;
+    } catch (err) {
+      const providerError = err instanceof AiProviderError ? err : null;
+      const retryable = !providerError || providerError.status === 429 || providerError.status >= 500;
+      if (providerError?.status === 429) {
+        limiter.blockFor(
+          Math.max(MIN_AI_RATE_LIMIT_COOLDOWN_MS, providerError.retryAfterMs ?? 0),
+        );
+      }
+      if (!retryable || attempt === AI_RETRY_DELAYS_MS.length) throw err;
+      const base = AI_RETRY_DELAYS_MS[attempt];
+      await sleepImpl(base + Math.floor(base * 0.25 * random()));
+    }
+  }
+
+  throw new Error("AI retry loop exhausted.");
+}
+
 /** Main entry: generate a personalised pitch for a lead. Never throws. */
 export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
   const ai = await getAiRuntime();
@@ -286,9 +396,21 @@ export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
     return templatePitch(ctx);
   }
 
+  const activeCircuit = activeCircuitFor(ai);
+  if (activeCircuit) {
+    const retryInSeconds = Math.max(1, Math.ceil((activeCircuit.until - Date.now()) / 1_000));
+    const fallbackReason = `AI provider cooling down for ${retryInSeconds}s after: ${activeCircuit.reason}`;
+    logger.warn(
+      { business: ctx.businessName, provider: ai.provider, retryInSeconds },
+      "AI circuit open, using template pitch without another provider request",
+    );
+    return { ...templatePitch(ctx), fallbackReason };
+  }
+
   const prompt = buildPrompt(ctx);
   try {
-    const result = await runAiPrompt(prompt, ai);
+    const result = await runAiPromptWithRetry(prompt, ai);
+    aiCircuits.delete(runtimeKey(ai));
     const parsed = parsePitchJson(result.text);
     return {
       subject: parsed.subject,
@@ -298,10 +420,12 @@ export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
       model: result.model,
     };
   } catch (err) {
+    const fallbackReason = err instanceof Error ? err.message : String(err);
+    openCircuit(ai, err);
     logger.warn(
-      { err: String(err), business: ctx.businessName, provider: ai.provider },
+      { err: fallbackReason, business: ctx.businessName, provider: ai.provider },
       "AI pitch failed, falling back to template",
     );
-    return templatePitch(ctx);
+    return { ...templatePitch(ctx), fallbackReason };
   }
 }

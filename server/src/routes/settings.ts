@@ -128,6 +128,7 @@ const integrationsSchema = z
         provider: z.enum(["AUTO", "OPENAI", "ANTHROPIC", "NVIDIA", "CUSTOM", "NONE"]).optional(),
         apiKey: z.string().max(500).optional(),
         model: z.string().max(200).optional(),
+        requestsPerMinute: z.number().int().min(1).max(300).optional(),
         baseUrl: z
           .string()
           .max(500)
@@ -234,6 +235,7 @@ settingsRouter.put(
         dailyEmailCap: z.number().int().min(1).max(500).optional(),
         discoveryEnabled: z.boolean().optional(),
         maxResultsPerQuery: z.number().int().min(1).max(60).optional(),
+        placesRequestsPerMinute: z.number().int().min(1).max(120).optional(),
         integrations: integrationsSchema.optional(),
       })
       .strict(),
@@ -357,9 +359,11 @@ settingsRouter.post(
     }
     try {
       const started = Date.now();
+      const settings = await getSettings();
       const results = await searchPlaces("restaurants in Lagos", "Lagos", "restaurants", {
         apiKey: key,
         maxResults: 1,
+        requestsPerMinute: settings.placesRequestsPerMinute,
       });
       res.json({ ok: true, latencyMs: Date.now() - started, sample: results[0]?.businessName ?? null });
     } catch (err) {

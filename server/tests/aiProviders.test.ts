@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { callAnthropic, callOpenAICompatible, runAiPrompt, sanitizeProse } from "../src/services/pitch/generatePitch.js";
+import {
+  callAnthropic,
+  callOpenAICompatible,
+  runAiPrompt,
+  runAiPromptWithRetry,
+  sanitizeProse,
+  type AiRequestLimiter,
+} from "../src/services/pitch/generatePitch.js";
 import type { ResolvedAi } from "../src/config/runtime.js";
 
 function ai(overrides: Partial<ResolvedAi> = {}): ResolvedAi {
@@ -9,6 +16,7 @@ function ai(overrides: Partial<ResolvedAi> = {}): ResolvedAi {
     apiKey: "sk-test",
     model: "gpt-4o-mini",
     baseUrl: "https://api.openai.com/v1",
+    requestsPerMinute: 30,
     configured: true,
     source: "db",
     ...overrides,
@@ -77,6 +85,58 @@ describe("runAiPrompt", () => {
 
   it("throws when no provider protocol is set", async () => {
     await expect(runAiPrompt("p", ai({ protocol: "none", configured: false }))).rejects.toThrow(/No AI provider/);
+  });
+
+  it("globally cools down and retries a provider 429", async () => {
+    let calls = 0;
+    const blocked: number[] = [];
+    const sleeps: number[] = [];
+    const limiter: AiRequestLimiter = {
+      waitTurn: async () => undefined,
+      blockFor: (ms) => blocked.push(ms),
+    };
+    const f = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("quota", { status: 429, headers: { "retry-after": "90" } });
+      }
+      return okJson('{"observation":"o","subject":"s","message":"m"}');
+    }) as typeof fetch;
+
+    const result = await runAiPromptWithRetry("p", ai(), {
+      fetchImpl: f,
+      limiter,
+      sleepImpl: async (ms) => {
+        sleeps.push(ms);
+      },
+      random: () => 0,
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(calls).toBe(2);
+    expect(blocked).toEqual([90_000]);
+    expect(sleeps).toEqual([5_000]);
+  });
+
+  it("does not retry permanent AI authentication failures", async () => {
+    let calls = 0;
+    const limiter: AiRequestLimiter = {
+      waitTurn: async () => undefined,
+      blockFor: () => undefined,
+    };
+    const f = (async () => {
+      calls += 1;
+      return new Response("bad key", { status: 401 });
+    }) as typeof fetch;
+
+    await expect(
+      runAiPromptWithRetry("p", ai(), {
+        fetchImpl: f,
+        limiter,
+        sleepImpl: async () => undefined,
+      }),
+    ).rejects.toThrow(/openai error 401/);
+    expect(calls).toBe(1);
   });
 });
 

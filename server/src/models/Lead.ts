@@ -131,6 +131,7 @@ export interface LeadDocument extends Document {
   pitchMessage?: string;
   pitchGeneratedAt?: Date;
   pitchModel?: string;
+  pitchFallbackReason?: string;
 
   // Outreach / CRM
   outreachChannel: OutreachChannel;
@@ -272,6 +273,7 @@ const leadSchema = new Schema<LeadDocument>(
     pitchMessage: String,
     pitchGeneratedAt: Date,
     pitchModel: String,
+    pitchFallbackReason: String,
 
     outreachChannel: { type: String, enum: OUTREACH_CHANNELS, default: "NONE" },
     pipelineStage: { type: String, enum: PIPELINE_STAGES, default: "DISCOVERED", index: true },

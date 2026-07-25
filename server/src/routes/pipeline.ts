@@ -3,6 +3,11 @@ import { z } from "zod";
 import { SearchRun } from "../models/SearchRun.js";
 import { asyncHandler, validateBody } from "../middleware/index.js";
 import { discover, processPendingLeads, runFullPipeline } from "../services/pipeline/runPipeline.js";
+import {
+  getPipelineJob,
+  getPipelineOperationalStatus,
+  startPipelineJob,
+} from "../services/pipeline/backgroundJobs.js";
 import { importLeads, runExtraSources } from "../services/discovery/sources/runSources.js";
 import { runFollowUps } from "../services/outreach/followUp.js";
 import { checkWebsite } from "../services/websiteChecker/index.js";
@@ -42,6 +47,63 @@ pipelineRouter.post(
   asyncHandler(async (_req, res) => {
     const result = await runFullPipeline("API");
     res.json(result);
+  }),
+);
+
+/** POST /api/pipeline/jobs/full, durable background full pipeline. */
+pipelineRouter.post(
+  "/jobs/full",
+  asyncHandler(async (_req, res) => {
+    const job = await startPipelineJob({ type: "FULL" });
+    res.status(202).json({ job });
+  }),
+);
+
+/** POST /api/pipeline/jobs/discovery, durable background Places discovery only. */
+pipelineRouter.post(
+  "/jobs/discovery",
+  asyncHandler(async (_req, res) => {
+    const job = await startPipelineJob({ type: "DISCOVERY" });
+    res.status(202).json({ job });
+  }),
+);
+
+/** POST /api/pipeline/jobs/process, recover/process all persisted DISCOVERED leads. */
+pipelineRouter.post(
+  "/jobs/process",
+  asyncHandler(async (_req, res) => {
+    const job = await startPipelineJob({ type: "PROCESS" });
+    res.status(202).json({ job });
+  }),
+);
+
+/** GET /api/pipeline/jobs/status, active job plus recovery actions. */
+pipelineRouter.get(
+  "/jobs/status",
+  asyncHandler(async (_req, res) => {
+    res.json(await getPipelineOperationalStatus());
+  }),
+);
+
+/** GET /api/pipeline/jobs/:id, persisted background progress. */
+pipelineRouter.get(
+  "/jobs/:id",
+  asyncHandler(async (req, res) => {
+    const job = await getPipelineJob(req.params.id);
+    if (!job) return res.status(404).json({ error: "Pipeline job not found" });
+    res.json({ job });
+  }),
+);
+
+/** POST /api/pipeline/runs/:id/resume, retry only failed/unattempted queries then process leads. */
+pipelineRouter.post(
+  "/runs/:id/resume",
+  asyncHandler(async (req, res) => {
+    const job = await startPipelineJob({
+      type: "RESUME_DISCOVERY",
+      resumedFromRunId: req.params.id,
+    });
+    res.status(202).json({ job });
   }),
 );
 

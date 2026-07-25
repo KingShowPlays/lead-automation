@@ -353,8 +353,17 @@ export default function LeadDetailPage() {
                   <h2 className="section-title">Current pitch</h2>
                   <p className="section-description">The latest generated outreach copy stored for this business.</p>
                 </div>
-                {lead.pitchModel && <span className="status-badge text-purple-600">{lead.pitchModel}</span>}
+                {lead.pitchFallbackReason ? (
+                  <span className="status-badge text-amber-600">Template fallback</span>
+                ) : (
+                  lead.pitchModel && <span className="status-badge text-purple-600">{lead.pitchModel}</span>
+                )}
               </div>
+              {lead.pitchFallbackReason && (
+                <p className="mb-4 break-words border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
+                  AI fallback reason: {lead.pitchFallbackReason}
+                </p>
+              )}
               {lead.pitchSubject && (
                 <p className="border-b border-slate-200 pb-3 text-sm font-bold dark:border-slate-800">Subject: {lead.pitchSubject}</p>
               )}

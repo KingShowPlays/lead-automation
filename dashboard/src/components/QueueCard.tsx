@@ -227,8 +227,19 @@ export function QueueCard({
               <h3 className="section-title">Pitch review</h3>
               <p className="section-description">Edit the message before approval. Changes save automatically when approved.</p>
             </div>
-            {lead.pitchModel && <span className="status-badge text-purple-600">AI · {lead.pitchModel}</span>}
+            {lead.pitchFallbackReason ? (
+              <span className="status-badge text-amber-600">Template fallback</span>
+            ) : (
+              lead.pitchModel && <span className="status-badge text-purple-600">AI · {lead.pitchModel}</span>
+            )}
           </div>
+
+          {lead.pitchFallbackReason && (
+            <p className="mb-4 break-words border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
+              The AI provider was unavailable, so this lead has a safe template pitch. You can regenerate it after the
+              provider recovers.
+            </p>
+          )}
 
           <div className="space-y-4">
             {emailChannel && (

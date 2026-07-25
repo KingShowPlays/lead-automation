@@ -81,10 +81,10 @@ Provider options you can set from the dashboard:
 
 | Setting | Options |
 |---|---|
-| AI pitch writer | OpenAI, Anthropic, NVIDIA NIM, or any OpenAI-compatible endpoint (Groq, Together, Ollama, vLLM). Template fallback when off. |
+| AI pitch writer | OpenAI, Anthropic, NVIDIA NIM, or any OpenAI-compatible endpoint (Groq, Together, Ollama, vLLM). Adjustable pacing, retry/cooldown protection, and a visible template fallback. |
 | Email sending | Gmail (real drafts), Zoho or any SMTP mailbox, Resend. |
 | Lead sources | Google Places, manual/bulk import, and a directory/sitemap crawler. Each is an independent toggle, all additive. See [docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md). |
-| Discovery | Target cities and categories, results per query. |
+| Discovery | Target cities and categories, results per query, and an adaptive Places request ceiling (60/min by default). |
 | Scheduler | Discovery and follow-up crons, timezone, on/off. Applies live. |
 | Guardrails | Score threshold, daily email cap, follow-up delay, max contact attempts, scoring weights. |
 
@@ -101,6 +101,12 @@ POST /api/pipeline/discover           Google Places discovery only
 POST /api/pipeline/discover-sources   run the non-Places sources only
 POST /api/pipeline/import             manual/bulk lead import {items, city?, category?}
 POST /api/pipeline/process            process unchecked leads
+POST /api/pipeline/jobs/full          start a persisted background full scan
+POST /api/pipeline/jobs/discovery     start persisted background discovery
+POST /api/pipeline/jobs/process       process all persisted DISCOVERED leads
+GET  /api/pipeline/jobs/status        active/latest progress + recovery actions
+GET  /api/pipeline/jobs/:id           one persisted job and its progress
+POST /api/pipeline/runs/:id/resume    retry only failed/unattempted searches
 POST /api/pipeline/follow-ups         send due follow-ups
 POST /api/pipeline/check-website      ad-hoc website audit {url}
 GET  /api/pipeline/runs               discovery run history
@@ -123,6 +129,13 @@ POST /api/settings/onboarding         mark first-run setup complete or re-open i
 POST /api/settings/test-ai|test-email|test-places   provider connection tests
 GET  /api/stats                       funnel, revenue, integrations, leads by source
 ```
+
+The dashboard uses the background job routes, so a browser/Railway request
+timeout cannot abandon the work. Progress is saved after every Places query
+and every processed lead batch. If Places returns 429, the shared limiter
+honours `Retry-After`, slows down, stops cleanly after bounded retries, and
+offers only the failed or unattempted searches for resumption. Leads already
+stored as `DISCOVERED` can be processed without calling Places again.
 
 ## Compliance (built in, not bolted on)
 

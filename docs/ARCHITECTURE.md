@@ -6,7 +6,7 @@
                          ┌──────────────────────────────────────────────┐
                          │                 server/  (API)               │
                          │                                              │
-  cron / n8n / API  ───► │  pipeline.runFullPipeline()                  │
+  cron / n8n / API  ───► │  persisted background pipeline job          │
                          │    1. sources: Places + import + directory   │
                          │    2. processPending() per lead:             │
                          │         checkWebsite() ─ DNS/SSL/HTTP/HTML    │
@@ -16,7 +16,7 @@
                          │         generatePitch()─ OpenAI/Anthropic     │
                          │    ↓                                          │
                          │  MongoDB  (Lead, Suppression, OutreachLog,    │
-                         │            SearchRun, Settings)               │
+                         │            SearchRun, PipelineJob, Settings)  │
                          └───────────────▲───────────────┬──────────────┘
                                          │ REST /api      │
                          ┌───────────────┴───────────────▼──────────────┐
@@ -30,7 +30,7 @@
 
 ### Discovery, `services/discovery/`
 Multiple sources feed one shared upsert (`upsertIncomingLead` in `pipeline/runPipeline.ts`), so dedup and suppression behave identically no matter where a lead came from, and enabling one source never affects another.
-- `googlePlaces.ts`, Text Search against Places API (New) with a tight field mask (keeps billing on the basic SKU). Paginates up to 60 results/query, flags `FUTURE_OPENING`/`OPENING_SOON` as opening soon, skips closed. Injectable `fetchImpl` for tests.
+- `googlePlaces.ts`, Text Search against Places API (New) with a tight field mask (keeps billing on the basic SKU). Paginates up to 60 results/query, flags `FUTURE_OPENING`/`OPENING_SOON` as opening soon, skips closed. Every request passes through one adaptive limiter; 429 responses trigger a shared cooldown and bounded retries.
 - `sources/directoryCrawler.ts`, pulls candidate business links from a public directory page or `sitemap.xml`, skipping social/aggregator hosts and internal nav, deduped by domain. Pure extraction, injectable fetch.
 - `sources/runSources.ts`, runs the enabled non-Places sources and the manual/bulk import into the shared upsert. `importLeads()` is the manual capture path (Instagram finds, referrals, CAC lookups) that answers the lagging-signal problem of Places. See [DISCOVERY_SOURCES.md](DISCOVERY_SOURCES.md).
 
@@ -49,7 +49,16 @@ Scrapes the business's **own** homepage (+ a linked contact/about page) for emai
 Pure function over `{websiteType, hasEmail, whatsappAvailable, openingSoon, instagramActive, strongVisualBrand}` with weights from `Settings`. Returns score + breakdown + qualified flag. Clamped at 0. Matches the plan's table exactly and is fully configurable from the dashboard.
 
 ### Pitch, `services/pitch/generatePitch.ts`
-Builds a structured prompt (business name, category, website problem, IG bio, recent post, suggested YEAN solution per category, channel) and sends it to the configured provider. `callOpenAICompatible` covers OpenAI, NVIDIA NIM, and any custom OpenAI-compatible endpoint; `callAnthropic` covers Anthropic. Output is parsed as `{observation, subject, message}` with robust JSON extraction, then run through `sanitizeProse` so the house style holds even when a model drifts (no em dashes, straight quotes). A deterministic template fallback runs on any failure so the pipeline never stalls.
+Builds a structured prompt (business name, category, website problem, IG bio, recent post, suggested YEAN solution per category, channel) and sends it to the configured provider. `callOpenAICompatible` covers OpenAI, NVIDIA NIM, and any custom OpenAI-compatible endpoint; `callAnthropic` covers Anthropic. Output is parsed as `{observation, subject, message}` with robust JSON extraction, then run through `sanitizeProse` so the house style holds even when a model drifts (no em dashes, straight quotes). AI calls are globally paced, retry transient failures, honour 429 cooldowns, and open a temporary circuit after final failure. A deterministic template fallback runs and is counted visibly so the pipeline never stalls or silently degrades.
+
+### Background pipeline, `services/pipeline/`
+Dashboard scans are persisted as `PipelineJob` records and return HTTP 202
+immediately. `SearchRun` stores the complete city/category query plan plus
+per-query results and heartbeats, so a restart or exhausted quota can resume
+only failed/unattempted searches. Database leases prevent overlapping
+discovery or processing across the API, scheduler, and background jobs.
+Existing `DISCOVERED` leads are independently recoverable without another
+Places request.
 
 ### Runtime config, `config/runtime.ts`
 Pure resolvers turn a `Settings.integrations` snapshot into a resolved provider config, with the rule `dashboard/DB value > env var > default`. `resolveAi`, `resolveEmail`, `resolvePlacesKey`, `resolveScheduler`, and `resolveChecker` are all pure and unit-tested. Secrets are masked for transport with `maskSecret`, and `applyIntegrationsPatch` ignores masked placeholders on save so re-saving settings never wipes a stored key.
@@ -73,7 +82,9 @@ Pure resolvers turn a `Settings.integrations` snapshot into a resolved provider 
 - **Lead**, the master record: identity, discovery, contacts+provenance, website check snapshot, score+breakdown, pitch, outreach/CRM state, approval, compliance flags. Indexed on stage, approval status, score, website type, place id (unique sparse), follow-up date.
 - **Suppression**, `{type, value}` unique; the never-contact list.
 - **OutreachLog**, append-only audit trail (drafts, sends, follow-ups, responses, opt-outs, conversions).
-- **SearchRun**, per-run discovery stats.
+- **SearchRun**, per-run discovery plan, progress, failures, and resume links.
+- **PipelineJob**, durable background scan/process progress and visible fallback/error counts.
+- **PipelineLease**, short database-backed discovery/processing locks.
 - **Settings**, singleton: cities, categories, weights, thresholds, caps, an `onboardedAt` marker for the first-run wizard, and an `integrations` sub-document holding the Google Places key, AI provider config, email provider config, scheduler crons, checker tuning, and lead-source toggles. Secrets never leave the API unmasked.
 - **Lead**, carries a `discoverySource` ("google_places" / "manual_import" / "directory") so you can see which channel converts.
 

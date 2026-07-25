@@ -65,6 +65,22 @@ describe("resolveAi", () => {
     expect(r).toMatchObject({ provider: "openai", protocol: "openai", apiKey: "sk-1", source: "db" });
     expect(r.baseUrl).toBe("https://api.openai.com/v1");
     expect(r.model).toBe("gpt-4o-mini");
+    expect(r.requestsPerMinute).toBe(30);
+  });
+
+  it("uses the configured AI request ceiling", () => {
+    const r = resolveAi(
+      integrations({
+        ai: {
+          provider: "OPENAI",
+          apiKey: "sk-1",
+          model: "",
+          requestsPerMinute: 75,
+          baseUrl: "",
+        },
+      }),
+    );
+    expect(r.requestsPerMinute).toBe(75);
   });
 
   it("NVIDIA uses the NIM base URL and openai protocol", () => {

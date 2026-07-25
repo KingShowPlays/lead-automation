@@ -1,7 +1,15 @@
 import { Lead, type LeadDocument } from "../../models/Lead.js";
-import { SearchRun, type SearchRunDocument } from "../../models/SearchRun.js";
+import {
+  SearchRun,
+  type SearchQueryPlan,
+  type SearchRunDocument,
+  type SearchRunStatus,
+} from "../../models/SearchRun.js";
 import { getSettings } from "../../models/Settings.js";
-import { buildQueries, searchPlaces } from "../discovery/googlePlaces.js";
+import {
+  buildQueries,
+  searchPlaces,
+} from "../discovery/googlePlaces.js";
 import { checkWebsite } from "../websiteChecker/index.js";
 import { enrichLead } from "../enrichment/index.js";
 import { scoreLead, maturityOf } from "../scoring/leadScore.js";
@@ -9,11 +17,12 @@ import { generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
 import { normalizeNigerianPhone } from "../../utils/phone.js";
-import { mapWithConcurrency, sleep } from "../../utils/async.js";
+import { mapWithConcurrency } from "../../utils/async.js";
 import { getCheckerRuntime, getPlacesKey } from "../../config/runtime.js";
 import { runExtraSources, type SourceRunStats } from "../discovery/sources/runSources.js";
 import { logger } from "../../utils/logger.js";
 import type { DiscoveredBusiness, IncomingLead } from "../../types.js";
+import { withPipelineLease } from "./coordinator.js";
 
 /**
  * Pipeline orchestration.
@@ -26,15 +35,46 @@ import type { DiscoveredBusiness, IncomingLead } from "../../types.js";
 
 export interface DiscoverResult {
   runId: string;
+  status: SearchRunStatus;
+  totalQueries: number;
+  completedQueries: number;
+  failedQueries: number;
+  pendingQueries: number;
   found: number;
   created: number;
   duplicates: number;
   suppressed: number;
 }
 
+export interface DiscoveryProgress {
+  runId: string;
+  current: number;
+  total: number;
+  failed: number;
+  pending: number;
+  query?: SearchQueryPlan;
+  found: number;
+  created: number;
+}
+
+export interface DiscoverOptions {
+  queries?: SearchQueryPlan[];
+  resumedFromRunId?: string;
+  onProgress?: (progress: DiscoveryProgress) => void | Promise<void>;
+}
+
 export async function discover(
   trigger: "CRON" | "MANUAL" | "API" = "MANUAL",
   override?: { cities?: string[]; categories?: string[] },
+  options: DiscoverOptions = {},
+): Promise<DiscoverResult> {
+  return withPipelineLease("discovery", () => discoverUnlocked(trigger, override, options));
+}
+
+async function discoverUnlocked(
+  trigger: "CRON" | "MANUAL" | "API",
+  override: { cities?: string[]; categories?: string[] } | undefined,
+  options: DiscoverOptions,
 ): Promise<DiscoverResult> {
   const placesKey = await getPlacesKey();
   if (!placesKey) {
@@ -44,18 +84,39 @@ export async function discover(
   const settings = await getSettings();
   const cities = override?.cities?.length ? override.cities : settings.cities;
   const categories = override?.categories?.length ? override.categories : settings.categories;
-  const queries = buildQueries(cities, categories);
+  const queries = options.queries?.length ? options.queries : buildQueries(cities, categories);
 
-  const run: SearchRunDocument = await SearchRun.create({ trigger, status: "RUNNING" });
+  const run: SearchRunDocument = await SearchRun.create({
+    trigger,
+    status: "RUNNING",
+    plannedQueries: queries,
+    resumedFrom: options.resumedFromRunId,
+    heartbeatAt: new Date(),
+    progress: {
+      totalQueries: queries.length,
+      completedQueries: 0,
+      successfulQueries: 0,
+      failedQueries: 0,
+      pendingQueries: queries.length,
+    },
+  });
   const totals = { found: 0, created: 0, duplicates: 0, suppressed: 0 };
 
   try {
+    if (options.resumedFromRunId) {
+      await SearchRun.updateOne(
+        { _id: options.resumedFromRunId },
+        { $set: { resumedBy: run._id } },
+      );
+    }
     for (const q of queries) {
       const stats = { query: q.query, city: q.city, category: q.category, found: 0, created: 0, duplicates: 0, suppressed: 0, error: undefined as string | undefined };
+      let queryFailed = false;
       try {
         const businesses = await searchPlaces(q.query, q.city, q.category, {
           maxResults: settings.maxResultsPerQuery,
           apiKey: placesKey,
+          requestsPerMinute: settings.placesRequestsPerMinute,
         });
         stats.found = businesses.length;
 
@@ -65,6 +126,7 @@ export async function discover(
         }
       } catch (err) {
         stats.error = err instanceof Error ? err.message : String(err);
+        queryFailed = true;
         logger.error({ query: q.query, err: stats.error }, "discovery query failed");
       }
       run.queries.push(stats);
@@ -72,13 +134,43 @@ export async function discover(
       totals.created += stats.created;
       totals.duplicates += stats.duplicates;
       totals.suppressed += stats.suppressed;
-      // Be a polite API citizen between queries.
-      await sleep(500);
+      run.totals = { ...run.totals, ...totals };
+      run.progress.completedQueries += 1;
+      if (stats.error) run.progress.failedQueries += 1;
+      else run.progress.successfulQueries += 1;
+      run.progress.pendingQueries = Math.max(0, queries.length - run.progress.completedQueries);
+      run.heartbeatAt = new Date();
+      await run.save();
+
+      if (options.onProgress) {
+        await Promise.resolve(
+          options.onProgress({
+            runId: String(run._id),
+            current: run.progress.completedQueries,
+            total: queries.length,
+            failed: run.progress.failedQueries,
+            pending: run.progress.pendingQueries,
+            query: q,
+            found: totals.found,
+            created: totals.created,
+          }),
+        ).catch((err) => logger.warn({ err: String(err) }, "discovery progress callback failed"));
+      }
+
+      // A request already exhausted the bounded retries (or failed with a
+      // permanent 4xx), so stop instead of repeating the same provider
+      // failure across every remaining query. The untouched plan is resumable.
+      if (queryFailed) break;
     }
 
     run.totals = { ...run.totals, ...totals };
-    run.status = "COMPLETED";
+    run.progress.pendingQueries = Math.max(0, queries.length - run.progress.completedQueries);
+    run.status =
+      run.progress.failedQueries > 0 || run.progress.pendingQueries > 0
+        ? "PARTIAL"
+        : "COMPLETED";
     run.finishedAt = new Date();
+    run.heartbeatAt = new Date();
     await run.save();
   } catch (err) {
     run.status = "FAILED";
@@ -89,7 +181,61 @@ export async function discover(
   }
 
   logger.info(totals, "discovery complete");
-  return { runId: String(run._id), ...totals };
+  return {
+    runId: String(run._id),
+    status: run.status,
+    totalQueries: run.progress.totalQueries,
+    completedQueries: run.progress.completedQueries,
+    failedQueries: run.progress.failedQueries,
+    pendingQueries: run.progress.pendingQueries,
+    ...totals,
+  };
+}
+
+function queryKey(q: SearchQueryPlan): string {
+  return `${q.city}\u0000${q.category}\u0000${q.query}`;
+}
+
+/** Failed plus never-attempted queries from a prior run, with successes excluded. */
+export function recoverableQueriesForRun(run: SearchRunDocument): SearchQueryPlan[] {
+  const plan = (run.plannedQueries ?? []).length
+    ? run.plannedQueries
+    : run.queries.map(({ query, city, category }) => ({ query, city, category }));
+  const successful = new Set(run.queries.filter((q) => !q.error).map(queryKey));
+  const seen = new Set<string>();
+  return plan.filter((q) => {
+    const key = queryKey(q);
+    if (successful.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export async function resumeDiscoveryRun(
+  runId: string,
+  trigger: "CRON" | "MANUAL" | "API" = "API",
+  onProgress?: DiscoverOptions["onProgress"],
+): Promise<DiscoverResult> {
+  let previous: SearchRunDocument | null = null;
+  try {
+    previous = await SearchRun.findById(runId);
+  } catch {
+    // Invalid ObjectIds and missing runs intentionally share the same safe response.
+  }
+  if (!previous) {
+    throw Object.assign(new Error("Discovery run not found."), { statusCode: 404 });
+  }
+  const queries = recoverableQueriesForRun(previous);
+  if (queries.length === 0) {
+    throw Object.assign(new Error("This discovery run has no failed or incomplete queries to resume."), {
+      statusCode: 409,
+    });
+  }
+  return discover(trigger, undefined, {
+    queries,
+    resumedFromRunId: String(previous._id),
+    onProgress,
+  });
 }
 
 export type UpsertOutcome = "created" | "duplicates" | "suppressed";
@@ -226,6 +372,7 @@ export interface ProcessOutcome {
   score: number;
   qualified: boolean;
   websiteType: string;
+  aiFallback: boolean;
 }
 
 /** Runs the full check→enrich→score→pitch flow for one lead. */
@@ -267,6 +414,7 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
       score: 0,
       qualified: false,
       websiteType: lead.websiteType,
+      aiFallback: false,
     };
   }
 
@@ -299,6 +447,7 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
   lead.reachBreakdown = scoreResult.reachBreakdown;
   lead.scoredAt = new Date();
   lead.pipelineStage = scoreResult.qualified ? "QUALIFIED" : "DISQUALIFIED";
+  let aiFallback = false;
 
   // 4) Pitch for qualified leads
   if (scoreResult.qualified) {
@@ -311,6 +460,8 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
     lead.pitchMessage = pitch.message;
     lead.pitchGeneratedAt = new Date();
     lead.pitchModel = `${pitch.provider}/${pitch.model}`;
+    lead.pitchFallbackReason = pitch.fallbackReason;
+    aiFallback = Boolean(pitch.fallbackReason);
     lead.pipelineStage = "PENDING_APPROVAL";
     lead.approval.status = "PENDING";
   }
@@ -323,6 +474,7 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
     score: lead.leadScore,
     qualified: scoreResult.qualified,
     websiteType: lead.websiteType,
+    aiFallback,
   };
 }
 
@@ -330,7 +482,21 @@ export interface BatchProcessResult {
   processed: number;
   qualified: number;
   disqualified: number;
+  aiFallbacks: number;
   errors: Array<{ lead: string; error: string }>;
+}
+
+export interface ProcessingProgress {
+  current: number;
+  total: number;
+  processed: number;
+  qualified: number;
+  errors: number;
+  aiFallbacks: number;
+}
+
+export interface ProcessOptions {
+  onProgress?: (progress: ProcessingProgress) => void | Promise<void>;
 }
 
 /**
@@ -338,9 +504,31 @@ export interface BatchProcessResult {
  * (continuity: work interrupted by a crash/restart is picked up here on the
  * next run, because progress is stage-based and persisted per lead).
  */
-export async function processPendingLeads(batchSize = 200, maxBatches = 50): Promise<BatchProcessResult> {
-  const result: BatchProcessResult = { processed: 0, qualified: 0, disqualified: 0, errors: [] };
+export async function processPendingLeads(
+  batchSize = 200,
+  maxBatches = 50,
+  options: ProcessOptions = {},
+): Promise<BatchProcessResult> {
+  return withPipelineLease("processing", () => processPendingLeadsUnlocked(batchSize, maxBatches, options));
+}
+
+async function processPendingLeadsUnlocked(
+  batchSize: number,
+  maxBatches: number,
+  options: ProcessOptions,
+): Promise<BatchProcessResult> {
+  const result: BatchProcessResult = {
+    processed: 0,
+    qualified: 0,
+    disqualified: 0,
+    aiFallbacks: 0,
+    errors: [],
+  };
   const checker = await getCheckerRuntime();
+  const total = Math.min(
+    await Lead.countDocuments({ pipelineStage: "DISCOVERED", optedOut: { $ne: true } }),
+    batchSize * maxBatches,
+  );
   // Leads that threw stay in DISCOVERED (retried on the NEXT run); exclude
   // them from later batches of THIS run so we never spin on a poison lead.
   const failedIds: unknown[] = [];
@@ -364,12 +552,26 @@ export async function processPendingLeads(batchSize = 200, maxBatches = 50): Pro
         result.processed++;
         if (o.value.qualified) result.qualified++;
         else result.disqualified++;
+        if (o.value.aiFallback) result.aiFallbacks++;
       } else {
         failedIds.push(pending[i]?._id);
         result.errors.push({ lead: pending[i]?.businessName ?? "unknown", error: o.error.message });
         logger.error({ lead: pending[i]?.businessName, err: o.error.message }, "lead processing failed");
       }
     });
+
+    if (options.onProgress) {
+      await Promise.resolve(
+        options.onProgress({
+          current: result.processed + result.errors.length,
+          total,
+          processed: result.processed,
+          qualified: result.qualified,
+          errors: result.errors.length,
+          aiFallbacks: result.aiFallbacks,
+        }),
+      ).catch((err) => logger.warn({ err: String(err) }, "processing progress callback failed"));
+    }
 
     // A lead whose processing throws stays in DISCOVERED; if literally every
     // lead in a batch failed (DB down, etc.), stop instead of spinning.
@@ -385,13 +587,32 @@ export interface FullPipelineResult extends DiscoverResult, BatchProcessResult {
   sources?: SourceRunStats[];
 }
 
-export async function runFullPipeline(trigger: "CRON" | "MANUAL" | "API" = "MANUAL"): Promise<FullPipelineResult> {
+export interface FullPipelineOptions {
+  onDiscoveryProgress?: DiscoverOptions["onProgress"];
+  onProcessingProgress?: ProcessOptions["onProgress"];
+}
+
+export async function runFullPipeline(
+  trigger: "CRON" | "MANUAL" | "API" = "MANUAL",
+  options: FullPipelineOptions = {},
+): Promise<FullPipelineResult> {
   // Google Places runs only when configured; the extra sources run whenever
   // they are toggled on. Either path alone is enough to feed the pipeline.
   const placesConfigured = Boolean(await getPlacesKey());
   const discovery: DiscoverResult = placesConfigured
-    ? await discover(trigger)
-    : { runId: "", found: 0, created: 0, duplicates: 0, suppressed: 0 };
+    ? await discover(trigger, undefined, { onProgress: options.onDiscoveryProgress })
+    : {
+        runId: "",
+        status: "COMPLETED",
+        totalQueries: 0,
+        completedQueries: 0,
+        failedQueries: 0,
+        pendingQueries: 0,
+        found: 0,
+        created: 0,
+        duplicates: 0,
+        suppressed: 0,
+      };
 
   // Additive: enabled non-Places sources contribute more DISCOVERED leads.
   const sources = await runExtraSources();
@@ -402,7 +623,7 @@ export async function runFullPipeline(trigger: "CRON" | "MANUAL" | "API" = "MANU
     discovery.suppressed += s.suppressed;
   }
 
-  const processing = await processPendingLeads();
+  const processing = await processPendingLeads(200, 50, { onProgress: options.onProcessingProgress });
 
   if (discovery.runId) {
     await SearchRun.findByIdAndUpdate(discovery.runId, {

@@ -4,6 +4,7 @@ import { integrationStatus } from "./config/runtime.js";
 import { connectDbWithRetry, disconnectDb } from "./db/connect.js";
 import { getSettings } from "./models/Settings.js";
 import { startScheduler, stopScheduler } from "./services/scheduler.js";
+import { recoverInterruptedPipelineWork } from "./services/pipeline/backgroundJobs.js";
 import { logger } from "./utils/logger.js";
 
 /**
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
       void (async () => {
         try {
           await getSettings(); // ensure the settings singleton exists
+          await recoverInterruptedPipelineWork();
           await startScheduler();
           const status = await integrationStatus();
           logger.info(

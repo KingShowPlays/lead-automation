@@ -96,6 +96,7 @@ export interface Lead {
   pitchSubject?: string;
   pitchMessage?: string;
   pitchModel?: string;
+  pitchFallbackReason?: string;
   outreachChannel: "EMAIL" | "INSTAGRAM_MANUAL" | "WHATSAPP" | "NONE";
   pipelineStage: PipelineStage;
   outreachStatus: OutreachStatus;
@@ -161,6 +162,45 @@ export interface Stats {
   };
 }
 
+export type PipelineJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+
+export interface PipelineJob {
+  _id: string;
+  type: "FULL" | "DISCOVERY" | "PROCESS" | "RESUME_DISCOVERY";
+  status: PipelineJobStatus;
+  phase: "QUEUED" | "DISCOVERY" | "PROCESSING" | "COMPLETE";
+  searchRunId?: string;
+  resumedFromRunId?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  heartbeatAt: string;
+  progress: {
+    current: number;
+    total: number;
+    message: string;
+    found: number;
+    created: number;
+    failedQueries: number;
+    processed: number;
+    qualified: number;
+    processingErrors: number;
+    aiFallbacks: number;
+  };
+  error?: string;
+}
+
+export interface PipelineOperationalStatus {
+  activeJob: PipelineJob | null;
+  latestJob: PipelineJob | null;
+  discoveredPending: number;
+  resumableRun: {
+    runId: string;
+    status: string;
+    recoverableQueries: number;
+    startedAt: string;
+  } | null;
+}
+
 export interface AnalyticsStats {
   window: {
     days: number | "all";
@@ -214,7 +254,7 @@ export type EmailProviderName = "AUTO" | "GMAIL" | "ZOHO" | "RESEND" | "NONE";
 
 export interface IntegrationSettings {
   googlePlacesApiKey: string;
-  ai: { provider: AiProvider; apiKey: string; model: string; baseUrl: string };
+  ai: { provider: AiProvider; apiKey: string; model: string; requestsPerMinute: number; baseUrl: string };
   email: {
     provider: EmailProviderName;
     fromAddress: string;
@@ -241,6 +281,7 @@ export interface Settings {
   dailyEmailCap: number;
   discoveryEnabled: boolean;
   maxResultsPerQuery: number;
+  placesRequestsPerMinute: number;
   integrations: IntegrationSettings;
   onboardedAt: string | null;
 }

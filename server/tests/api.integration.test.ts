@@ -9,6 +9,9 @@ import { config } from "../src/config/index.js";
 import { Lead } from "../src/models/Lead.js";
 import { Suppression } from "../src/models/Suppression.js";
 import { OutreachLog } from "../src/models/OutreachLog.js";
+import { PipelineJob } from "../src/models/PipelineJob.js";
+import { PipelineLease } from "../src/models/PipelineLease.js";
+import { SearchRun } from "../src/models/SearchRun.js";
 import { getSettings } from "../src/models/Settings.js";
 import { processLead } from "../src/services/pipeline/runPipeline.js";
 import { runFollowUps } from "../src/services/outreach/followUp.js";
@@ -30,7 +33,14 @@ beforeAll(async () => {
       mongod = await MongoMemoryServer.create();
       await mongoose.connect(mongod.getUri("yean_test"));
     }
-    await Promise.all([Lead.deleteMany({}), Suppression.deleteMany({}), OutreachLog.deleteMany({})]);
+    await Promise.all([
+      Lead.deleteMany({}),
+      Suppression.deleteMany({}),
+      OutreachLog.deleteMany({}),
+      PipelineJob.deleteMany({}),
+      PipelineLease.deleteMany({}),
+      SearchRun.deleteMany({}),
+    ]);
     await getSettings();
     app = createApp();
   } catch (err) {
@@ -120,6 +130,7 @@ describe("settings API", () => {
     expect(res.body.settings.scoringWeights.noWebsite).toBe(60);
     expect(res.body.settings.scoringWeights.newBusiness).toBe(18);
     expect(res.body.settings.scoringWeights.phoneOnly).toBe(15);
+    expect(res.body.settings.placesRequestsPerMinute).toBe(60);
   });
 
   it("updates cities, threshold and weights", async () => {
@@ -128,11 +139,13 @@ describe("settings API", () => {
       .send({
         cities: ["Lagos", "Enugu"],
         scoreThreshold: 45,
+        placesRequestsPerMinute: 24,
         scoringWeights: { shopifyWebsite: 20, newBusiness: 21, phoneOnly: 17 },
       });
     expect(res.status).toBe(200);
     expect(res.body.settings.cities).toEqual(["Lagos", "Enugu"]);
     expect(res.body.settings.scoreThreshold).toBe(45);
+    expect(res.body.settings.placesRequestsPerMinute).toBe(24);
     expect(res.body.settings.scoringWeights.shopifyWebsite).toBe(20);
     expect(res.body.settings.scoringWeights.newBusiness).toBe(21);
     expect(res.body.settings.scoringWeights.phoneOnly).toBe(17);
@@ -146,6 +159,8 @@ describe("settings API", () => {
   it("rejects invalid updates", async () => {
     const res = await request(app).put("/api/settings").send({ cities: [] });
     expect(res.status).toBe(400);
+    const unsafeRate = await request(app).put("/api/settings").send({ placesRequestsPerMinute: 121 });
+    expect(unsafeRate.status).toBe(400);
   });
 });
 
@@ -711,5 +726,101 @@ describe("email provider send flow (mocked provider)", () => {
     } finally {
       _setEmailProviderForTests(null);
     }
+  });
+});
+
+describe("background pipeline recovery", () => {
+  it("runs persisted DISCOVERED leads in the background and rejects overlapping jobs", async () => {
+    await Promise.all([Lead.deleteMany({}), PipelineJob.deleteMany({}), PipelineLease.deleteMany({})]);
+    // Earlier provider tests intentionally leave a dead custom endpoint in
+    // settings. Disable AI here so this test isolates background recovery and
+    // uses the intentional built-in template rather than an outage fallback.
+    const settingsUpdate = await request(app)
+      .put("/api/settings")
+      .send({ integrations: { ai: { provider: "NONE" } } });
+    expect(settingsUpdate.status).toBe(200);
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        makeLead({
+          businessName: `Recovered Lead ${index}`,
+          businessNameNormalized: `recovered lead ${index}`,
+          phone: undefined,
+        }),
+      ),
+    );
+
+    const attempts = await Promise.all([
+      request(app).post("/api/pipeline/jobs/process").send({}),
+      request(app).post("/api/pipeline/jobs/process").send({}),
+    ]);
+    const started = attempts.find((attempt) => attempt.status === 202)!;
+    const overlapping = attempts.find((attempt) => attempt.status === 409)!;
+    expect(started.status).toBe(202);
+    expect(started.body.job.type).toBe("PROCESS");
+    expect(overlapping.status).toBe(409);
+
+    const jobId = started.body.job._id as string;
+    let job = started.body.job as { status: string; progress: { processed: number; qualified: number } };
+    for (let attempt = 0; attempt < 100 && ["QUEUED", "RUNNING"].includes(job.status); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const polled = await request(app).get(`/api/pipeline/jobs/${jobId}`);
+      expect(polled.status).toBe(200);
+      job = polled.body.job;
+    }
+
+    expect(job.status).toBe("COMPLETED");
+    expect(job.progress.processed).toBe(12);
+    expect(job.progress.qualified).toBe(12);
+
+    const status = await request(app).get("/api/pipeline/jobs/status");
+    expect(status.status).toBe(200);
+    expect(status.body.activeJob).toBeNull();
+    expect(status.body.discoveredPending).toBe(0);
+  });
+
+  it("surfaces a partial run as resumable without rerunning successful queries", async () => {
+    await SearchRun.deleteMany({});
+    const run = await SearchRun.create({
+      trigger: "API",
+      status: "PARTIAL",
+      plannedQueries: [
+        { query: "restaurants in Accra", city: "Accra", category: "restaurants" },
+        { query: "salons in Accra", city: "Accra", category: "salons" },
+        { query: "hotels in Accra", city: "Accra", category: "hotels" },
+      ],
+      queries: [
+        {
+          query: "restaurants in Accra",
+          city: "Accra",
+          category: "restaurants",
+          found: 20,
+          created: 20,
+          duplicates: 0,
+          suppressed: 0,
+        },
+        {
+          query: "salons in Accra",
+          city: "Accra",
+          category: "salons",
+          found: 0,
+          created: 0,
+          duplicates: 0,
+          suppressed: 0,
+          error: "Places API rate limited (429)",
+        },
+      ],
+      progress: {
+        totalQueries: 3,
+        completedQueries: 2,
+        successfulQueries: 1,
+        failedQueries: 1,
+        pendingQueries: 1,
+      },
+    });
+
+    const status = await request(app).get("/api/pipeline/jobs/status");
+    expect(status.status).toBe(200);
+    expect(status.body.resumableRun.runId).toBe(String(run._id));
+    expect(status.body.resumableRun.recoverableQueries).toBe(2);
   });
 });

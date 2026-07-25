@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -16,15 +16,19 @@ import {
   RiArrowRightLine,
   RiTimeLine,
   RiBarChartBoxLine,
+  RiRestartLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/motion";
-import type { OutreachLogEntry, Stats } from "@/lib/types";
+import type { OutreachLogEntry, PipelineJob, PipelineOperationalStatus, Stats } from "@/lib/types";
 
 export default function OverviewPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [operations, setOperations] = useState<PipelineOperationalStatus | null>(null);
+  const [starting, setStarting] = useState<PipelineJob["type"] | null>(null);
+  const previousActiveJob = useRef<string | null>(null);
+  const operationsReady = useRef(false);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -46,20 +50,86 @@ export default function OverviewPage() {
   useEffect(() => load(), [load]);
   useVisiblePolling(load, 30000);
 
-  async function runPipeline() {
-    setRunning(true);
-    const id = toast.loading("Running discovery and lead processing…");
+  const loadOperations = useCallback(async () => {
     try {
-      const result = await api.runFull();
-      toast.success(`Found ${result.found}, created ${result.created}, qualified ${result.qualified}.`, {
-        id,
-        duration: 8000,
-      });
-      load();
+      const next = await api.pipelineStatus();
+      const completedJob =
+        operationsReady.current && previousActiveJob.current && !next.activeJob
+          ? next.latestJob
+          : null;
+      previousActiveJob.current = next.activeJob?._id ?? null;
+      operationsReady.current = true;
+      setOperations(next);
+      if (completedJob) {
+        if (completedJob.status === "COMPLETED") {
+          toast.success(
+            `Pipeline finished: ${completedJob.progress.processed.toLocaleString()} processed, ${completedJob.progress.qualified.toLocaleString()} qualified.`,
+          );
+        } else {
+          toast.error(completedJob.error ?? completedJob.progress.message);
+        }
+        load();
+      }
+    } catch {
+      // The primary dashboard request already reports API connectivity. Keep
+      // background polling quiet during a transient restart.
+    }
+  }, [load]);
+
+  useEffect(() => {
+    void loadOperations();
+    const timer = window.setInterval(() => void loadOperations(), operations?.activeJob ? 3000 : 12000);
+    return () => window.clearInterval(timer);
+  }, [loadOperations, operations?.activeJob]);
+
+  function adoptStartedJob(job: PipelineJob): void {
+    previousActiveJob.current = job._id;
+    operationsReady.current = true;
+    setOperations((current) => ({
+      activeJob: job,
+      latestJob: job,
+      discoveredPending: current?.discoveredPending ?? 0,
+      resumableRun: current?.resumableRun ?? null,
+    }));
+  }
+
+  async function runPipeline() {
+    setStarting("FULL");
+    try {
+      const { job } = await api.startFullJob();
+      adoptStartedJob(job);
+      toast.success("Full scan started safely in the background.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Pipeline failed", { id });
+      toast.error(e instanceof Error ? e.message : "Pipeline could not start");
     } finally {
-      setRunning(false);
+      setStarting(null);
+    }
+  }
+
+  async function processDiscovered() {
+    setStarting("PROCESS");
+    try {
+      const { job } = await api.startProcessJob();
+      adoptStartedJob(job);
+      toast.success("Existing discovered leads are now being processed.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Processing could not start");
+    } finally {
+      setStarting(null);
+    }
+  }
+
+  async function resumeDiscovery() {
+    if (!operations?.resumableRun) return;
+    setStarting("RESUME_DISCOVERY");
+    try {
+      const { job } = await api.resumeDiscoveryJob(operations.resumableRun.runId);
+      adoptStartedJob(job);
+      toast.success(`Retrying ${operations.resumableRun.recoverableQueries} failed or incomplete searches.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Discovery could not resume");
+    } finally {
+      setStarting(null);
     }
   }
 
@@ -95,6 +165,7 @@ export default function OverviewPage() {
   }
 
   if (!stats || !insights) return <OverviewSkeleton />;
+  const pipelineBusy = Boolean(operations?.activeJob || starting);
 
   const funnel: Array<[string, number, string]> = [
     ["Discovered", stats.byStage.DISCOVERED ?? stats.totals.total, "/leads?stage=DISCOVERED"],
@@ -146,12 +217,38 @@ export default function OverviewPage() {
           <Link href="/leads" className="btn-ghost">
             View all leads <RiArrowRightLine className="h-4 w-4" />
           </Link>
-          <button onClick={runPipeline} disabled={running || !stats.integrations.googlePlaces} className="btn-cta">
-            {running ? <span className="loader-spinner h-4 w-4 border-2 border-white/40 border-t-white" /> : <RiPlayCircleLine className="h-5 w-5" />}
-            {running ? "Running…" : "Run discovery"}
+          {(operations?.discoveredPending ?? 0) > 0 && (
+            <button onClick={processDiscovered} disabled={pipelineBusy} className="btn-ghost">
+              {starting === "PROCESS" ? (
+                <span className="loader-spinner h-4 w-4 border-2 border-slate-400/40 border-t-slate-600" />
+              ) : (
+                <RiRestartLine className="h-4 w-4" />
+              )}
+              Process {operations?.discoveredPending.toLocaleString()} discovered
+            </button>
+          )}
+          {operations?.resumableRun && (
+            <button onClick={resumeDiscovery} disabled={pipelineBusy} className="btn-ghost">
+              {starting === "RESUME_DISCOVERY" ? (
+                <span className="loader-spinner h-4 w-4 border-2 border-slate-400/40 border-t-slate-600" />
+              ) : (
+                <RiRestartLine className="h-4 w-4" />
+              )}
+              Resume {operations.resumableRun.recoverableQueries} searches
+            </button>
+          )}
+          <button onClick={runPipeline} disabled={pipelineBusy || !stats.integrations.googlePlaces} className="btn-cta">
+            {starting === "FULL" || operations?.activeJob ? (
+              <span className="loader-spinner h-4 w-4 border-2 border-white/40 border-t-white" />
+            ) : (
+              <RiPlayCircleLine className="h-5 w-5" />
+            )}
+            {operations?.activeJob ? "Running…" : "Run full scan"}
           </button>
         </div>
       </header>
+
+      {operations?.activeJob && <PipelineProgress job={operations.activeJob} />}
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -341,6 +438,67 @@ export default function OverviewPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function PipelineProgress({ job }: { job: PipelineJob }) {
+  const total = Math.max(job.progress.total, 1);
+  const percent = Math.min(100, Math.round((job.progress.current / total) * 100));
+  const phase =
+    job.phase === "DISCOVERY"
+      ? "Discovering businesses"
+      : job.phase === "PROCESSING"
+        ? "Auditing and scoring leads"
+        : "Preparing pipeline";
+
+  return (
+    <section className="panel accent-purple mt-6 overflow-hidden border-t-4" aria-live="polite">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="loader-spinner h-4 w-4 shrink-0 border-2 border-purple-200 border-t-purple-600" />
+            <p className="font-heading text-sm font-extrabold text-slate-800 dark:text-white">{phase}</p>
+          </div>
+          <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">{job.progress.message}</p>
+        </div>
+        <p className="shrink-0 font-heading text-2xl font-extrabold tabular-nums text-purple-600">{percent}%</p>
+      </div>
+      <div className="mt-4 h-3 overflow-hidden border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30">
+        <div className="h-full bg-purple-600 transition-[width] duration-500" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <ProgressValue label="Found" value={job.progress.found} />
+        <ProgressValue label="Created" value={job.progress.created} />
+        <ProgressValue label="Processed" value={job.progress.processed} />
+        <ProgressValue label="Qualified" value={job.progress.qualified} />
+      </div>
+      {(job.progress.failedQueries > 0 || job.progress.processingErrors > 0 || job.progress.aiFallbacks > 0) && (
+        <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-400">
+          {job.progress.failedQueries > 0
+            ? `${job.progress.failedQueries} search${job.progress.failedQueries === 1 ? "" : "es"} will remain resumable.`
+            : ""}
+          {job.progress.failedQueries > 0 && job.progress.processingErrors > 0 ? " " : ""}
+          {job.progress.processingErrors > 0
+            ? `${job.progress.processingErrors} lead${job.progress.processingErrors === 1 ? "" : "s"} can be processed again.`
+            : ""}
+          {(job.progress.failedQueries > 0 || job.progress.processingErrors > 0) && job.progress.aiFallbacks > 0
+            ? " "
+            : ""}
+          {job.progress.aiFallbacks > 0
+            ? `${job.progress.aiFallbacks} AI pitch${job.progress.aiFallbacks === 1 ? "" : "es"} used the safe template fallback.`
+            : ""}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ProgressValue({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0 border border-slate-200 p-3 dark:border-slate-800">
+      <p className="truncate text-slate-400">{label}</p>
+      <p className="mt-1 font-heading text-lg font-extrabold tabular-nums">{value.toLocaleString()}</p>
     </div>
   );
 }

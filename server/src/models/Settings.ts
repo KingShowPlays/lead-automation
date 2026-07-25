@@ -21,6 +21,8 @@ export interface AiSettings {
   provider: AiProvider;
   apiKey: string;
   model: string;
+  /** Provider request ceiling; adaptive limiter backs off below it on 429. */
+  requestsPerMinute?: number;
   /** Base URL for OpenAI-compatible endpoints (used by CUSTOM; optional override for OPENAI/NVIDIA). */
   baseUrl: string;
 }
@@ -85,6 +87,8 @@ export interface SettingsDocument extends Document {
   discoveryEnabled: boolean;
   /** Max Places results requested per query (each page = 20; 3 pages max). */
   maxResultsPerQuery: number;
+  /** Project-wide Text Search pacing. Conservative default protects Places quota. */
+  placesRequestsPerMinute: number;
   integrations: IntegrationSettings;
   /** Set once the first-run onboarding wizard is completed. */
   onboardedAt: Date | null;
@@ -124,6 +128,7 @@ const settingsSchema = new Schema<SettingsDocument>(
     dailyEmailCap: { type: Number, default: config.DAILY_EMAIL_CAP },
     discoveryEnabled: { type: Boolean, default: true },
     maxResultsPerQuery: { type: Number, default: 60 },
+    placesRequestsPerMinute: { type: Number, default: 60 },
     integrations: {
       googlePlacesApiKey: { type: String, default: "" },
       ai: {
@@ -134,6 +139,7 @@ const settingsSchema = new Schema<SettingsDocument>(
         },
         apiKey: { type: String, default: "" },
         model: { type: String, default: "" },
+        requestsPerMinute: { type: Number, default: 30 },
         baseUrl: { type: String, default: "" },
       },
       email: {

@@ -30,6 +30,10 @@ Any MongoDB works. Options:
 > Billing must be enabled on the project. Text Search bills per request; the daily
 > run makes `cities × categories` requests (× up to 3 pages). With 3 cities and 7
 > categories that's ≤63 requests/day. Keep `maxResultsPerQuery` modest to control cost.
+> The app defaults to an adaptive ceiling of 60 Places requests/minute. A 429
+> triggers a global cooldown, honours Google's `Retry-After`, halves the effective
+> pace, and leaves failed/unattempted searches resumable instead of restarting the
+> whole city/category matrix.
 
 ## 3. AI pitch writer (optional but recommended)
 
@@ -45,6 +49,12 @@ Choose a provider in the dashboard (Settings, AI) or via env. Supported:
 In the dashboard, pick the provider, paste the key, optionally set a model and base URL, then click Test AI. The base URL for a custom endpoint looks like `https://api.groq.com/openai/v1` or `http://localhost:11434/v1` for a local Ollama (no key needed).
 
 Via env, set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `NVIDIA_API_KEY` and leave the dashboard provider on Auto. Whatever a model writes is normalised to the house writing style (no em dashes, straight quotes). With no provider set, the system uses deterministic template pitches so nothing breaks.
+
+Bulk AI calls also pass through one adaptive limiter (30 requests/minute by
+default, adjustable in Settings). Provider 429s honour `Retry-After`; transient
+errors retry with backoff. If the provider still fails, a short circuit breaker
+prevents every remaining lead from repeating the same bad request, uses the
+template pitch, and reports the fallback count in pipeline progress.
 
 ## 4. Email sending (optional)
 

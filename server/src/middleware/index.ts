@@ -67,7 +67,10 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return;
   }
   const message = err instanceof Error ? err.message : "Internal server error";
-  const status = /not configured|cannot run|buffering timed out|Database unavailable/i.test(message) ? 503 : 500;
+  const status =
+    e?.statusCode ??
+    e?.status ??
+    (/not configured|cannot run|buffering timed out|Database unavailable/i.test(message) ? 503 : 500);
   logger.error({ err: err instanceof Error ? err.stack : String(err), path: req.path }, "request failed");
   res.status(status).json({ error: message });
 }

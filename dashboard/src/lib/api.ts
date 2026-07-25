@@ -5,6 +5,8 @@ import type {
   IntegrationStatus,
   Lead,
   OutreachLogEntry,
+  PipelineJob,
+  PipelineOperationalStatus,
   Settings,
   Stats,
   SuppressionEntry,
@@ -123,6 +125,28 @@ export const api = {
       method: "POST",
       body: "{}",
     }),
+
+  startFullJob: () =>
+    req<{ job: PipelineJob }>(`/api/pipeline/jobs/full`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  startProcessJob: () =>
+    req<{ job: PipelineJob }>(`/api/pipeline/jobs/process`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  resumeDiscoveryJob: (runId: string) =>
+    req<{ job: PipelineJob }>(`/api/pipeline/runs/${runId}/resume`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  pipelineStatus: () => req<PipelineOperationalStatus>(`/api/pipeline/jobs/status`),
+
+  pipelineJob: (id: string) => req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}`),
 
   suppression: (page = 1) => req<{ items: SuppressionEntry[]; total: number; pages: number }>(`/api/suppression?page=${page}`),
 

@@ -556,6 +556,7 @@ leadsRouter.post(
     lead.pitchMessage = pitch.message;
     lead.pitchGeneratedAt = new Date();
     lead.pitchModel = `${pitch.provider}/${pitch.model}`;
+    lead.pitchFallbackReason = pitch.fallbackReason;
     if (lead.pipelineStage === "QUALIFIED") {
       lead.pipelineStage = "PENDING_APPROVAL";
       lead.approval.status = "PENDING";

@@ -53,6 +53,7 @@ export interface ResolvedAi {
   apiKey: string;
   model: string;
   baseUrl: string;
+  requestsPerMinute: number;
   configured: boolean;
   /** Where the deciding config came from (for the dashboard status panel). */
   source: "db" | "env" | "none";
@@ -70,6 +71,7 @@ const NONE_AI: ResolvedAi = {
   apiKey: "",
   model: "",
   baseUrl: "",
+  requestsPerMinute: 30,
   configured: false,
   source: "none",
 };
@@ -94,6 +96,7 @@ export function resolveAi(integrations?: IntegrationSettings): ResolvedAi {
       apiKey,
       model: dbModel || config.PITCH_MODEL || defaults.model,
       baseUrl: dbBaseUrl || defaults.baseUrl,
+      requestsPerMinute: Math.max(1, Math.min(ai?.requestsPerMinute || 30, 300)),
       configured: true,
       source,
     };
