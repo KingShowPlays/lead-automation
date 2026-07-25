@@ -110,6 +110,9 @@
   .metric{position:absolute;width:352px;padding:28px 34px;background:rgba(9,15,30,.93);border:1px solid var(--line);
     border-top:4px solid var(--emerald);backdrop-filter:blur(8px);will-change:transform,opacity;text-align:left;}
   .metric .v{font-family:'SpaceG';font-size:62px;font-weight:700;letter-spacing:-.03em;}
+  /* Currency values use a tighter, fixed-width treatment so every frame stays inside its card. */
+  #m3 .v{font-size:46px;letter-spacing:-.045em;line-height:1;white-space:nowrap;overflow:hidden;}
+  #rev .v{font-size:44px!important;letter-spacing:-.055em;line-height:1;white-space:nowrap;overflow:hidden;}
   .metric .l{font-size:17px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
 
   /* funnel */
