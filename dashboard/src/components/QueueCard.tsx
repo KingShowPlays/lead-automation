@@ -114,27 +114,29 @@ export function QueueCard({
   const issueCount = lead.websiteCheck?.issues?.length ?? 0;
 
   return (
-    <article className={`queue-card glass-card overflow-hidden border-l-4 ${accent}`}>
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-800">
-        <div className="flex min-w-0 flex-col items-start gap-3.5 sm:flex-row">
-          <IntelligenceScores priority={priority} need={lead.needScore ?? lead.leadScore} reach={lead.reachScore} />
-          <div className="min-w-0">
+    <article className={`queue-card glass-card w-full min-w-0 max-w-full overflow-hidden border-l-4 ${accent}`}>
+      <div className="queue-card-header flex min-w-0 flex-col items-start gap-4 border-b border-slate-200 p-4 sm:flex-row sm:flex-wrap sm:justify-between sm:p-5 dark:border-slate-800">
+        <div className="queue-card-identity flex w-full min-w-0 flex-col items-start gap-3.5 sm:w-auto sm:flex-1 sm:flex-row">
+          <div className="queue-score-wrap w-full min-w-0 sm:w-auto">
+            <IntelligenceScores priority={priority} need={lead.needScore ?? lead.leadScore} reach={lead.reachScore} />
+          </div>
+          <div className="w-full min-w-0 sm:w-auto">
             {position && total && (
               <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
                 Review {position} of {total}
               </p>
             )}
-            <h2 className="truncate font-heading text-xl font-extrabold tracking-tight">{lead.businessName}</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-              <span className="capitalize">{lead.category}</span>
-              <span className="inline-flex items-center gap-1">
-                <RiMapPin2Line /> {lead.city}
+            <h2 className="break-words font-heading text-xl font-extrabold tracking-tight sm:truncate">{lead.businessName}</h2>
+            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <span className="min-w-0 break-words capitalize">{lead.category}</span>
+              <span className="inline-flex min-w-0 items-center gap-1 break-words">
+                <RiMapPin2Line className="shrink-0" /> {lead.city}
               </span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{lead.outreachChannel.replaceAll("_", " ")}</span>
+              <span className="min-w-0 break-words font-bold text-slate-700 dark:text-slate-200">{lead.outreachChannel.replaceAll("_", " ")}</span>
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="queue-card-badges flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:w-auto sm:max-w-full sm:justify-end">
           <WebsiteTypeBadge type={lead.websiteType} />
           <MaturityBadge maturity={lead.maturity} newToGoogle={lead.newToGoogle} />
           <SourceBadge source={lead.discoverySource} />
@@ -142,8 +144,8 @@ export function QueueCard({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-12">
-        <aside className="border-b border-slate-200 p-5 lg:col-span-4 lg:border-b-0 lg:border-r dark:border-slate-800">
+      <div className="queue-card-body grid min-w-0 lg:grid-cols-12">
+        <aside className="min-w-0 overflow-hidden border-b border-slate-200 p-4 sm:p-5 lg:col-span-4 lg:border-b-0 lg:border-r dark:border-slate-800">
           <div className="section-heading">
             <div>
               <h3 className="section-title">Lead intelligence</h3>
@@ -152,21 +154,21 @@ export function QueueCard({
           </div>
 
           {lead.websiteProblemSummary && (
-            <div className="border-l-4 border-brand-600 bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+            <div className="break-words border-l-4 border-brand-600 bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere] dark:bg-slate-800/60 dark:text-slate-300">
               {lead.websiteProblemSummary}
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <div className="queue-contact-chips mt-4 flex min-w-0 flex-wrap gap-2 text-xs">
             {lead.email && <Chip icon={<RiMailLine />} text={lead.email} />}
             {lead.instagramUsername && (
-              <a href={lead.instagramUrl} target="_blank" rel="noreferrer">
+              <a href={lead.instagramUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
                 <Chip icon={<RiInstagramLine />} text={`@${lead.instagramUsername}`} link />
               </a>
             )}
             {lead.whatsappAvailable && lead.phoneNormalized && <Chip icon={<RiWhatsappLine />} text={lead.phoneNormalized} />}
             {lead.websiteUrl && (
-              <a href={lead.websiteUrl} target="_blank" rel="noreferrer">
+              <a href={lead.websiteUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
                 <Chip icon={<RiGlobalLine />} text={shortUrl(lead.websiteUrl)} link />
               </a>
             )}
@@ -184,9 +186,9 @@ export function QueueCard({
               <p className="label">Why this lead needs the work</p>
               <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
                 {lead.needBreakdown.map((item) => (
-                  <li key={item.rule} className="flex justify-between gap-3 py-2">
-                    <span className="text-slate-500 dark:text-slate-400">{item.rule}</span>
-                    <span className={`font-extrabold tabular-nums ${item.points > 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                  <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
+                    <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
+                    <span className={`shrink-0 font-extrabold tabular-nums ${item.points > 0 ? "text-emerald-600" : "text-rose-500"}`}>
                       {item.points > 0 ? `+${item.points}` : item.points}
                     </span>
                   </li>
@@ -200,9 +202,9 @@ export function QueueCard({
               <p className="label">How to reach them</p>
               <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
                 {lead.reachBreakdown.map((item) => (
-                  <li key={item.rule} className="flex justify-between gap-3 py-2">
-                    <span className="text-slate-500 dark:text-slate-400">{item.rule}</span>
-                    <span className="font-extrabold tabular-nums text-brand-600">+{item.points}</span>
+                  <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
+                    <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
+                    <span className="shrink-0 font-extrabold tabular-nums text-brand-600">+{item.points}</span>
                   </li>
                 ))}
               </ul>
@@ -214,12 +216,12 @@ export function QueueCard({
               <p className="flex items-center gap-2 font-bold text-cta-600 dark:text-cta-400">
                 <RiErrorWarningLine /> Website issues
               </p>
-              <p className="mt-1 leading-relaxed">{lead.websiteCheck?.issues?.join(", ").toLowerCase().replaceAll("_", " ")}</p>
+              <p className="mt-1 break-words leading-relaxed [overflow-wrap:anywhere]">{lead.websiteCheck?.issues?.join(", ").toLowerCase().replaceAll("_", " ")}</p>
             </div>
           )}
         </aside>
 
-        <section className="p-5 lg:col-span-8">
+        <section className="min-w-0 overflow-hidden p-4 sm:p-5 lg:col-span-8">
           <div className="section-heading">
             <div>
               <h3 className="section-title">Pitch review</h3>
@@ -248,7 +250,7 @@ export function QueueCard({
               </label>
               <textarea
                 id={`msg-${lead._id}`}
-                className="input min-h-56 resize-y leading-relaxed"
+                className="input min-h-56 min-w-0 max-w-full resize-y leading-relaxed"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
               />
@@ -295,8 +297,8 @@ export function QueueCard({
               Reject
             </button>
             {lead.followUpAt && (
-              <span className="ml-auto inline-flex items-center gap-1 text-xs text-slate-400">
-                <RiTimeLine /> Follow-up {new Date(lead.followUpAt).toLocaleDateString("en-NG")}
+              <span className="queue-follow-up ml-auto inline-flex min-w-0 items-center gap-1 break-words text-xs text-slate-400">
+                <RiTimeLine className="shrink-0" /> Follow-up {new Date(lead.followUpAt).toLocaleDateString("en-NG")}
               </span>
             )}
           </div>
@@ -309,12 +311,12 @@ export function QueueCard({
 function Chip({ icon, text, link }: { icon: React.ReactNode; text: string; link?: boolean }) {
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1.5 border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${
         link ? "hover:border-brand-500 hover:text-brand-600" : ""
       }`}
     >
       <span className="shrink-0">{icon}</span>
-      <span className="truncate">{text}</span>
+      <span className="min-w-0 truncate">{text}</span>
     </span>
   );
 }

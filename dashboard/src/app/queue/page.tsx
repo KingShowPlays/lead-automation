@@ -69,8 +69,8 @@ export default function QueuePage() {
         </div>
       </header>
 
-      <div className="toolbar justify-between">
-        <div className="segmented-control max-w-full overflow-x-auto" aria-label="Filter approval queue by channel">
+      <div className="queue-toolbar toolbar min-w-0 justify-between">
+        <div className="queue-channel-filter segmented-control max-w-full overflow-x-auto" aria-label="Filter approval queue by channel">
           <button type="button" aria-pressed={channel === "ALL"} onClick={() => setChannel("ALL")}>
             All
           </button>
@@ -81,7 +81,7 @@ export default function QueuePage() {
             <RiInstagramLine className="mr-1 inline h-3.5 w-3.5" /> Instagram
           </button>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="min-w-0 break-words text-xs text-slate-500 dark:text-slate-400">
           Highest commercial priority appears first · need qualifies, reach ranks
         </p>
       </div>
@@ -112,7 +112,7 @@ export default function QueuePage() {
         </div>
       )}
 
-      <div className="mt-6 space-y-5">
+      <div className="queue-list mt-6 min-w-0 max-w-full space-y-5">
         {leads?.map((lead, index) => (
           <QueueCard key={lead._id} lead={lead} onDone={remove} position={index + 1} total={leads.length} />
         ))}

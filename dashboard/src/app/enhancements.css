@@ -47,9 +47,13 @@
 /* Buttons, inputs, segmented controls and status badges share one 44px rhythm. */
 .status-badge {
   min-height: 2.75rem !important;
-  height: 2.75rem;
+  height: auto;
+  max-width: 100%;
   justify-content: center;
   padding: 0 1rem !important;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
 }
 
 .segmented-control,
@@ -60,10 +64,14 @@
 
 .page-actions > button,
 .page-actions > a,
-.page-actions > .btn,
-.section-heading > .status-badge {
+.page-actions > .btn {
   min-height: 2.75rem !important;
   height: 2.75rem;
+}
+
+.section-heading > .status-badge {
+  min-height: 2.75rem !important;
+  height: auto;
 }
 
 html[data-route="settings"] .app-main > div {
@@ -152,5 +160,80 @@ html[data-route="settings"] .app-main .fixed.inset-x-0.bottom-0 {
 
   .status-badge {
     flex: 0 0 auto;
+  }
+
+  html[data-route="queue"] .queue-toolbar {
+    align-items: stretch;
+  }
+
+  html[data-route="queue"] .queue-channel-filter {
+    display: grid;
+    width: 100% !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  html[data-route="queue"] .queue-channel-filter button {
+    min-width: 0;
+    padding-inline: 0.5rem;
+    white-space: nowrap;
+  }
+
+  html[data-route="queue"] .queue-card,
+  html[data-route="queue"] .queue-card-header,
+  html[data-route="queue"] .queue-card-body,
+  html[data-route="queue"] .queue-card aside,
+  html[data-route="queue"] .queue-card section {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  html[data-route="queue"] .queue-score-wrap .inline-flex {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  html[data-route="queue"] .queue-score-wrap .inline-flex > span {
+    min-width: 0;
+  }
+
+  html[data-route="queue"] .queue-card .section-heading {
+    align-items: flex-start !important;
+    flex-direction: column;
+  }
+
+  html[data-route="queue"] .queue-card .section-heading > :last-child {
+    align-self: flex-start;
+  }
+
+  html[data-route="queue"] .queue-card .status-badge {
+    min-height: 2rem !important;
+    height: auto !important;
+    padding: 0.4rem 0.65rem !important;
+    line-height: 1.25;
+  }
+
+  html[data-route="queue"] .queue-actions {
+    display: grid;
+    width: auto;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  html[data-route="queue"] .queue-actions > button,
+  html[data-route="queue"] .queue-actions > a {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  html[data-route="queue"] .queue-follow-up {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+    text-align: center;
   }
 }
