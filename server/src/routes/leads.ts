@@ -83,8 +83,11 @@ leadsRouter.get(
     if (q.minReach != null) filter.reachScore = { $gte: q.minReach };
     if (q.maturity) filter.maturity = { $in: q.maturity.split(",") };
     if (q.source) filter.discoverySource = { $in: q.source.split(",") };
-    if (q.newToGoogle) filter.newToGoogle = q.newToGoogle === "true";
-    if (q.openingSoon) filter.openingSoon = q.openingSoon === "true";
+    // `{field: false}` does not match a document where the field is absent, and
+    // it is absent on every lead stored before the field existed. Asking for
+    // "not new to Google" must include those, so false means "not true".
+    if (q.newToGoogle) filter.newToGoogle = q.newToGoogle === "true" ? true : { $ne: true };
+    if (q.openingSoon) filter.openingSoon = q.openingSoon === "true" ? true : { $ne: true };
     if (q.hasPitch) filter.pitchMessage = q.hasPitch === "true" ? { $nin: [null, ""] } : { $in: [null, ""] };
     // Opted-out leads are hidden unless asked for: they are not actionable and
     // burying live leads under them is how a queue stops being trusted.

@@ -72,6 +72,7 @@ const AI_PROVIDERS = [
   { value: "AUTO", label: "Auto (env keys)", hint: "Uses whichever key the server already has." },
   { value: "OPENAI", label: "OpenAI", hint: "gpt-4o-mini by default." },
   { value: "ANTHROPIC", label: "Anthropic", hint: "Haiku-class model by default." },
+  { value: "GROQ", label: "Groq", hint: "Fastest of the hosted options. Llama 3.3 70B by default." },
   { value: "NVIDIA", label: "NVIDIA NIM", hint: "Llama and friends via integrate.api.nvidia.com." },
   { value: "CUSTOM", label: "Custom endpoint", hint: "Any OpenAI-compatible server. Base URL and model required." },
   { value: "NONE", label: "Off (templates)", hint: "Built-in template pitches only." },
@@ -286,7 +287,7 @@ export default function SettingsPage() {
             label="API key"
             value={settings.integrations.ai.apiKey}
             onChange={(v) => updIntegrations({ ai: { ...settings.integrations.ai, apiKey: v } })}
-            placeholder="sk-…, nvapi-…, or blank for a local server"
+            placeholder="sk-…, gsk_…, nvapi-…, or blank for a local server"
           />
           <TextField
             label="Model"

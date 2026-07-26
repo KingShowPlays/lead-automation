@@ -123,11 +123,31 @@ a:active {
 }
 
 .app-main {
+  /*
+   * The page gutter, matching the px-4 / sm:px-6 / lg:px-8 utilities on this
+   * element. The full-bleed page header pulls its negative margin from this, so
+   * the two can never disagree. They used to: the header hardcoded -2rem while
+   * the gutter was 1.5rem at tablet widths, making the header 16px wider than
+   * the screen on every page.
+   */
+  --gutter: 1rem;
   width: 100%;
   min-width: 0;
   max-width: none;
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+@media (min-width: 640px) {
+  .app-main {
+    --gutter: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-main {
+    --gutter: 2rem;
+  }
 }
 
 .app-main > * {
@@ -208,8 +228,8 @@ a:active {
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  margin: -2rem -2rem 0;
-  padding: 1.5rem 2rem 1rem;
+  margin: -2rem calc(var(--gutter, 2rem) * -1) 0;
+  padding: 1.5rem var(--gutter, 2rem) 1rem;
   border-bottom: 1px solid rgb(var(--line));
   background: rgb(var(--page-bg) / 0.97);
 }
@@ -638,7 +658,7 @@ a:active {
   .page-header {
     align-items: flex-start;
     flex-direction: column;
-    margin: -1.25rem -1rem 0;
+    margin: -1.25rem calc(var(--gutter, 1rem) * -1) 0;
     padding: 1rem;
   }
 

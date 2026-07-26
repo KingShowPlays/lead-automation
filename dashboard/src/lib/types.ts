@@ -249,7 +249,7 @@ export interface SuppressionEntry {
   createdAt: string;
 }
 
-export type AiProvider = "AUTO" | "OPENAI" | "ANTHROPIC" | "NVIDIA" | "CUSTOM" | "NONE";
+export type AiProvider = "AUTO" | "OPENAI" | "ANTHROPIC" | "GROQ" | "NVIDIA" | "CUSTOM" | "NONE";
 export type EmailProviderName = "AUTO" | "GMAIL" | "ZOHO" | "RESEND" | "NONE";
 
 export interface IntegrationSettings {

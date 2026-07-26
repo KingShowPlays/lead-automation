@@ -15,6 +15,18 @@ import {
   RiUploadCloud2Line,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
+import {
+  CONTACTABLE_LABELS,
+  CONTACTABLE_OPTIONS,
+  DISCOVERY_SOURCES,
+  MATURITIES,
+  OUTREACH_STATUSES,
+  PIPELINE_STAGES,
+  SORT_LABELS,
+  SORT_OPTIONS,
+  WEBSITE_TYPES,
+  optionLabel,
+} from "@/lib/enums";
 import type { Lead } from "@/lib/types";
 import {
   IntelligenceScores,
@@ -25,41 +37,6 @@ import {
 } from "@/components/badges";
 import { ImportPanel } from "@/components/ImportPanel";
 
-const WEBSITE_TYPES = [
-  "NO_WEBSITE",
-  "BROKEN_WEBSITE",
-  "SOCIAL_MEDIA_ONLY",
-  "LINK_IN_BIO_ONLY",
-  "MENU_PLATFORM_ONLY",
-  "POOR_WEBSITE",
-  "SHOPIFY",
-  "CUSTOM_WEBSITE",
-];
-const STAGES = [
-  "DISCOVERED",
-  "CHECKED",
-  "ENRICHED",
-  "QUALIFIED",
-  "DISQUALIFIED",
-  "PENDING_APPROVAL",
-  "APPROVED",
-  "REJECTED",
-  "CONTACTED",
-  "ARCHIVED",
-];
-const OUTREACH_STATUSES = [
-  "NOT_CONTACTED",
-  "DRAFT_CREATED",
-  "CONTACTED",
-  "FOLLOW_UP_SENT",
-  "RESPONDED",
-  "INTERESTED",
-  "NOT_INTERESTED",
-  "CONVERTED",
-  "DO_NOT_CONTACT",
-];
-const MATURITIES = ["NEW", "EMERGING", "NEW,EMERGING", "ESTABLISHED", "UNKNOWN"];
-const SOURCES = ["google_places", "manual_import", "directory"];
 const SORTS = [
   ["-priority", "Highest priority"],
   ["-score", "Highest need"],
@@ -296,7 +273,7 @@ function LeadsPageInner() {
           onChange={(event) => updateFilter("stage", event.target.value)}
         >
           <option value="">All pipeline stages</option>
-          {STAGES.map((value) => <option key={value} value={value}>{displayValue("stage", value)}</option>)}
+          {PIPELINE_STAGES.map((value) => <option key={value} value={value}>{displayValue("stage", value)}</option>)}
         </select>
         <select
           className="input !w-auto min-w-44 flex-1"
@@ -347,7 +324,7 @@ function LeadsPageInner() {
               <FilterSelect label="Outreach status" value={filters.outreachStatus} onChange={(value) => updateFilter("outreachStatus", value)} options={OUTREACH_STATUSES} />
               <FilterSelect label="Contact route" value={filters.contactable} onChange={(value) => updateFilter("contactable", value)} options={["any", "email", "phone", "whatsapp", "instagram", "none"]} />
               <FilterSelect label="Business maturity" value={filters.maturity} onChange={(value) => updateFilter("maturity", value)} options={MATURITIES} />
-              <FilterSelect label="Discovery source" value={filters.source} onChange={(value) => updateFilter("source", value)} options={SOURCES} />
+              <FilterSelect label="Discovery source" value={filters.source} onChange={(value) => updateFilter("source", value)} options={DISCOVERY_SOURCES} />
               <FilterInput label="City" value={filters.city} onChange={(value) => updateFilter("city", value)} placeholder="e.g. Lagos" />
               <FilterInput label="Category" value={filters.category} onChange={(value) => updateFilter("category", value)} placeholder="e.g. restaurants" />
               <FilterInput label="Minimum need score" value={filters.minScore} onChange={(value) => updateFilter("minScore", value)} type="number" placeholder="0" />
@@ -503,7 +480,7 @@ function QuickFilter({ label, onClick }: { label: string; onClick: () => void })
   return <button type="button" onClick={onClick} className="min-h-9 border border-slate-300 bg-white px-3 text-xs font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{label}</button>;
 }
 
-function FilterSelect({ label, value, options, onChange, suffix = "" }: { label: string; value: string; options: string[]; onChange: (value: string) => void; suffix?: string }) {
+function FilterSelect({ label, value, options, onChange, suffix = "" }: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void; suffix?: string }) {
   return (
     <label>
       <span className="label">{label}</span>

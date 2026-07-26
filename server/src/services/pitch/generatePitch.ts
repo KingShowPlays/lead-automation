@@ -2,7 +2,7 @@ import { getAiRuntime, type ResolvedAi } from "../../config/runtime.js";
 import { logger } from "../../utils/logger.js";
 import { sleep } from "../../utils/async.js";
 import { AdaptiveRateLimiter, parseRetryAfterMs } from "../../utils/rateLimiter.js";
-import { truncate } from "../../utils/text.js";
+import { truncate, shortenName } from "../../utils/text.js";
 import type { LeadDocument } from "../../models/Lead.js";
 import type { PitchResult } from "../../types.js";
 
@@ -348,13 +348,13 @@ function problemLineFor(ctx: PitchContext): string {
 function subjectFor(ctx: PitchContext): string {
   switch (ctx.websiteType) {
     case "NO_WEBSITE":
-      return `A website for ${truncate(ctx.businessName, 30)}`;
+      return `A website for ${shortenName(ctx.businessName)}`;
     case "BROKEN_WEBSITE":
-      return `${truncate(ctx.businessName, 30)}: your website appears down`;
+      return `${shortenName(ctx.businessName)}: your website appears down`;
     case "SHOPIFY":
-      return `Beyond Shopify for ${truncate(ctx.businessName, 30)}`;
+      return `Beyond Shopify for ${shortenName(ctx.businessName)}`;
     default:
-      return `Your online presence, ${truncate(ctx.businessName, 30)}`;
+      return `Your online presence, ${shortenName(ctx.businessName)}`;
   }
 }
 

@@ -44,3 +44,6 @@ token.json
 # MongoDB local data
 data/db/
 state.json
+
+# Layout audit output
+dashboard/.audit-shots/

@@ -25,8 +25,8 @@
   top: auto !important;
   z-index: auto !important;
   align-items: center !important;
-  margin: -1rem -2rem 0 !important;
-  padding: 0.75rem 2rem 1rem !important;
+  margin: -1rem calc(var(--gutter, 2rem) * -1) 0 !important;
+  padding: 0.75rem var(--gutter, 2rem) 1rem !important;
 }
 
 .toolbar {
@@ -84,8 +84,8 @@ html[data-route="settings"] .app-main > div > header {
   top: auto;
   z-index: auto;
   align-items: center !important;
-  margin: -1rem -2rem 0;
-  padding: 0.75rem 2rem 1rem;
+  margin: -1rem calc(var(--gutter, 2rem) * -1) 0;
+  padding: 0.75rem var(--gutter, 2rem) 1rem;
   border-bottom: 1px solid rgb(var(--line));
   background: rgb(var(--page-bg));
 }
@@ -144,8 +144,8 @@ html[data-route="settings"] .app-main .fixed.inset-x-0.bottom-0 {
   html[data-route="settings"] .app-main > div > header {
     align-items: flex-start !important;
     flex-direction: column;
-    margin: -1rem -1rem 0 !important;
-    padding: 0.75rem 1rem 1rem !important;
+    margin: -1rem calc(var(--gutter, 1rem) * -1) 0 !important;
+    padding: 0.75rem var(--gutter, 1rem) 1rem !important;
   }
 
   .page-header .page-actions,

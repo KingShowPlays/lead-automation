@@ -1,6 +1,8 @@
 import { logger } from "../../utils/logger.js";
 import { normalizeNigerianPhone, isLikelyMobile } from "../../utils/phone.js";
 import { extractContactsFromHtml, mergeContacts } from "./contactExtractor.js";
+import { pickBestEmail } from "./emailQuality.js";
+import { extractDomain } from "../../utils/url.js";
 import type { LeadDocument } from "../../models/Lead.js";
 import type { ExtractedContacts } from "../../types.js";
 
@@ -86,16 +88,36 @@ export async function enrichLead(lead: LeadDocument, homepageHtml?: string | nul
   const now = new Date();
 
   if (!lead.email && contacts.emails.length > 0) {
-    const best = contacts.emails[0];
-    lead.email = best.value;
-    lead.emailVerifiedFormat = true;
-    lead.contactSources.push({
-      field: "email",
-      value: best.value,
-      source: "website",
-      sourceUrl: best.sourceUrl,
-      collectedAt: now,
+    // Not simply the first address on the page. The footer credit for the
+    // agency that built the site is an email too, and pitching them wastes the
+    // lead and costs sending reputation on the bounce.
+    const siteDomain = extractDomain(lead.websiteCheck?.finalUrl ?? lead.websiteUrl ?? null);
+    const { best, rejected } = pickBestEmail(contacts.emails, {
+      siteDomain,
+      businessName: lead.businessName,
     });
+
+    if (best) {
+      lead.email = best.value;
+      lead.emailVerifiedFormat = true;
+      lead.emailConfidence = best.assessment.confidence;
+      lead.emailAssessment = best.assessment.reason;
+      lead.contactSources.push({
+        field: "email",
+        value: best.value,
+        source: "website",
+        sourceUrl: best.sourceUrl,
+        collectedAt: now,
+      });
+    }
+    if (rejected.length > 0) {
+      // Recorded, not discarded: when an operator wonders why a lead has no
+      // email despite one being on the page, the answer is on the lead.
+      lead.rejectedEmails = rejected.slice(0, 5).map((r) => ({
+        value: r.value,
+        reason: r.assessment.reason,
+      }));
+    }
   }
 
   if (contacts.whatsappNumbers.length > 0) {

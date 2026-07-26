@@ -408,6 +408,7 @@ function AiStep({ draft, setDraft }: { draft: Draft; setDraft: React.Dispatch<Re
         <option value="NONE">Off, use templates</option>
         <option value="OPENAI">OpenAI</option>
         <option value="ANTHROPIC">Anthropic</option>
+        <option value="GROQ">Groq</option>
         <option value="NVIDIA">NVIDIA NIM</option>
         <option value="CUSTOM">Custom (OpenAI-compatible)</option>
       </select>

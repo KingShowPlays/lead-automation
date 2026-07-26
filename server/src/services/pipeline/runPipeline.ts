@@ -11,6 +11,7 @@ import {
   searchPlaces,
 } from "../discovery/googlePlaces.js";
 import { checkWebsite } from "../websiteChecker/index.js";
+import { resolveHiddenWebsite } from "../websiteChecker/behindLinkPage.js";
 import { enrichLead } from "../enrichment/index.js";
 import { scoreLead, maturityOf } from "../scoring/leadScore.js";
 import { applyPitchResult, generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
@@ -380,7 +381,49 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
   const settings = await getSettings();
 
   // 1) Website health check + classification
-  const { check, classification } = await checkWebsite(lead.websiteUrl);
+  let { check, classification } = await checkWebsite(lead.websiteUrl);
+
+  // A Linktree in the Google listing, or nothing at all with an Instagram
+  // handle, does not mean there is no website. The real site is often one link
+  // further on, and pitching "you have no website" to somebody who has one is
+  // the fastest way to lose the reply. Look before believing it.
+  const looksLikeLinkPage =
+    classification.websiteType === "LINK_IN_BIO_ONLY" || classification.websiteType === "MENU_PLATFORM_ONLY";
+  const looksAbsent = classification.websiteType === "NO_WEBSITE" || classification.websiteType === "SOCIAL_MEDIA_ONLY";
+
+  if (looksLikeLinkPage || looksAbsent) {
+    const hidden = await resolveHiddenWebsite({
+      linkPageUrl: looksLikeLinkPage ? (check?.finalUrl ?? lead.websiteUrl ?? null) : null,
+      instagramUsername: lead.instagramUsername ?? null,
+      businessName: lead.businessName,
+    });
+
+    if (hidden) {
+      const second = await checkWebsite(hidden.url);
+      // Only accept the discovery if what we found is actually a site of their
+      // own. A dead link or another rented page leaves the original verdict
+      // standing, which is the honest answer.
+      const realTypes = new Set(["CUSTOM_WEBSITE", "POOR_WEBSITE", "SHOPIFY", "BROKEN_WEBSITE"]);
+      if (realTypes.has(second.classification.websiteType)) {
+        check = second.check;
+        classification = second.classification;
+        lead.websiteUrl = hidden.url;
+        lead.websiteFoundVia = hidden.reason;
+        lead.contactSources.push({
+          field: "website",
+          value: hidden.url,
+          source: "link_page",
+          sourceUrl: hidden.url,
+          collectedAt: new Date(),
+        });
+        logger.info(
+          { lead: lead.businessName, url: hidden.url, via: hidden.reason },
+          "found a website hiding behind a link page",
+        );
+      }
+    }
+  }
+
   lead.websiteType = classification.websiteType;
   lead.websiteStatus = classification.websiteStatus;
   lead.websiteProblemSummary = classification.problemSummary;

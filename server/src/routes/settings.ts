@@ -129,7 +129,7 @@ const integrationsSchema = z
     googlePlacesApiKey: z.string().max(300).optional(),
     ai: z
       .object({
-        provider: z.enum(["AUTO", "OPENAI", "ANTHROPIC", "NVIDIA", "CUSTOM", "NONE"]).optional(),
+        provider: z.enum(["AUTO", "OPENAI", "ANTHROPIC", "GROQ", "NVIDIA", "CUSTOM", "NONE"]).optional(),
         apiKey: z.string().max(500).optional(),
         model: z.string().max(200).optional(),
         requestsPerMinute: z.number().int().min(1).max(300).optional(),

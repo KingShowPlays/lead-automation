@@ -21,7 +21,7 @@ import {
  * email / phone number we process).
  */
 export interface ContactSource {
-  field: "email" | "phone" | "whatsapp" | "instagram";
+  field: "email" | "phone" | "whatsapp" | "instagram" | "website";
   value: string;
   source: string; // e.g. "google_places", "website", "link_in_bio", "manual"
   sourceUrl?: string;
@@ -113,6 +113,15 @@ export interface LeadDocument extends Document {
   reachBreakdown: ScoreBreakdownEntry[];
   scoredAt?: Date;
 
+  /** 0-100 confidence that the stored email reaches the owner. */
+  emailConfidence?: number;
+  /** Why that confidence, in words, for the queue to show. */
+  emailAssessment?: string;
+  /** Addresses found on the page but judged to belong to somebody else. */
+  rejectedEmails: Array<{ value: string; reason: string }>;
+  /** Set when the real site was found behind a link page or bio. */
+  websiteFoundVia?: string;
+
   // Recency and activity
   /** NEW / EMERGING / ESTABLISHED, inferred from review count and opening status. */
   maturity: string;
@@ -169,7 +178,7 @@ export interface LeadDocument extends Document {
 
 const contactSourceSchema = new Schema<ContactSource>(
   {
-    field: { type: String, enum: ["email", "phone", "whatsapp", "instagram"], required: true },
+    field: { type: String, enum: ["email", "phone", "whatsapp", "instagram", "website"], required: true },
     value: { type: String, required: true },
     source: { type: String, required: true },
     sourceUrl: String,
@@ -258,6 +267,14 @@ const leadSchema = new Schema<LeadDocument>(
     needBreakdown: { type: [{ rule: String, points: Number, _id: false }], default: [] },
     reachBreakdown: { type: [{ rule: String, points: Number, _id: false }], default: [] },
     scoredAt: Date,
+
+    emailConfidence: Number,
+    emailAssessment: String,
+    rejectedEmails: {
+      type: [{ value: String, reason: String, _id: false }],
+      default: [],
+    },
+    websiteFoundVia: String,
 
     maturity: { type: String, default: "UNKNOWN", index: true },
     firstSeenAt: Date,

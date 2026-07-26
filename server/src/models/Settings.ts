@@ -14,7 +14,7 @@ import { config } from "../config/index.js";
  * fallback, see config/runtime.ts for the resolution rules.
  */
 
-export type AiProvider = "AUTO" | "OPENAI" | "ANTHROPIC" | "NVIDIA" | "CUSTOM" | "NONE";
+export type AiProvider = "AUTO" | "OPENAI" | "ANTHROPIC" | "GROQ" | "NVIDIA" | "CUSTOM" | "NONE";
 export type EmailProviderName = "AUTO" | "GMAIL" | "ZOHO" | "RESEND" | "NONE";
 
 export interface AiSettings {
@@ -134,7 +134,7 @@ const settingsSchema = new Schema<SettingsDocument>(
       ai: {
         provider: {
           type: String,
-          enum: ["AUTO", "OPENAI", "ANTHROPIC", "NVIDIA", "CUSTOM", "NONE"],
+          enum: ["AUTO", "OPENAI", "ANTHROPIC", "GROQ", "NVIDIA", "CUSTOM", "NONE"],
           default: "AUTO",
         },
         apiKey: { type: String, default: "" },

@@ -44,7 +44,7 @@ export function resolvePlacesKey(integrations?: IntegrationSettings): string {
 /* AI provider                                                         */
 /* ------------------------------------------------------------------ */
 
-export type ResolvedAiProvider = "openai" | "anthropic" | "nvidia" | "custom" | "none";
+export type ResolvedAiProvider = "openai" | "anthropic" | "nvidia" | "groq" | "custom" | "none";
 
 export interface ResolvedAi {
   provider: ResolvedAiProvider;
@@ -62,6 +62,7 @@ export interface ResolvedAi {
 const AI_DEFAULTS: Record<string, { baseUrl: string; model: string }> = {
   openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", model: "meta/llama-3.3-70b-instruct" },
+  groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
   anthropic: { baseUrl: "https://api.anthropic.com", model: "claude-haiku-4-5-20251001" },
 };
 
@@ -113,6 +114,10 @@ export function resolveAi(integrations?: IntegrationSettings): ResolvedAi {
       const key = dbKey || process.env.NVIDIA_API_KEY?.trim() || "";
       return key ? build("nvidia", "openai", key, dbKey ? "db" : "env") : NONE_AI;
     }
+    case "GROQ": {
+      const key = dbKey || process.env.GROQ_API_KEY?.trim() || "";
+      return key ? build("groq", "openai", key, dbKey ? "db" : "env") : NONE_AI;
+    }
     case "ANTHROPIC": {
       const key = dbKey || config.ANTHROPIC_API_KEY;
       return key ? build("anthropic", "anthropic", key, dbKey ? "db" : "env") : NONE_AI;
@@ -138,6 +143,10 @@ export function resolveAi(integrations?: IntegrationSettings): ResolvedAi {
       }
       if (config.OPENAI_API_KEY) return build("openai", "openai", config.OPENAI_API_KEY, "env");
       if (config.ANTHROPIC_API_KEY) return build("anthropic", "anthropic", config.ANTHROPIC_API_KEY, "env");
+      const groqKey = process.env.GROQ_API_KEY?.trim();
+      if (groqKey) return build("groq", "openai", groqKey, "env");
+      const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
+      if (nvidiaKey) return build("nvidia", "openai", nvidiaKey, "env");
       return NONE_AI;
     }
   }
