@@ -594,6 +594,15 @@ async function processPendingLeadsUnlocked(
       } else {
         failedIds.push(pending[i]?._id);
         result.errors.push({ lead: pending[i]?.businessName ?? "unknown", error: o.error.message });
+        // Count the failure so a lead that can never succeed stops being
+        // advertised as outstanding work on the dashboard.
+        const failedId = pending[i]?._id;
+        if (failedId) {
+          void Lead.updateOne(
+            { _id: failedId },
+            { $inc: { processingAttempts: 1 }, $set: { lastProcessingError: o.error.message.slice(0, 300) } },
+          ).catch(() => undefined);
+        }
         logger.error({ lead: pending[i]?.businessName, err: o.error.message }, "lead processing failed");
       }
     });

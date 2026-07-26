@@ -19,7 +19,7 @@ import {
   RiRestartLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
-import { useVisiblePolling } from "@/lib/motion";
+import { useLiveData } from "@/lib/live";
 import type { OutreachLogEntry, PipelineJob, PipelineOperationalStatus, Stats } from "@/lib/types";
 
 export default function OverviewPage() {
@@ -47,8 +47,7 @@ export default function OverviewPage() {
     };
   }, []);
 
-  useEffect(() => load(), [load]);
-  useVisiblePolling(load, 30000);
+  useLiveData(load, 20000);
 
   const loadOperations = useCallback(async () => {
     try {
@@ -157,7 +156,7 @@ export default function OverviewPage() {
           <h1 className="mt-4 font-heading text-xl font-bold">The dashboard cannot reach the API</h1>
           <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-500">{error}</p>
           <p className="mt-3 text-xs text-slate-400">
-            Check NEXT_PUBLIC_API_URL, NEXT_PUBLIC_API_KEY, and confirm that the server is running.
+            Check API_URL and API_KEY on the dashboard service, and confirm the server is running.
           </p>
         </div>
       </div>

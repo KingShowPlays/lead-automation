@@ -228,12 +228,26 @@ export async function getPipelineOperationalStatus(): Promise<{
   discoveredPending: number;
   resumableRun: { runId: string; status: string; recoverableQueries: number; startedAt: Date } | null;
 }> {
+  // A run that failed weeks ago is not pending work. The right answer then is a
+  // fresh scan, which will find those businesses anyway, so offering "resume"
+  // forever puts a call to action on screen for something nobody should do.
+  const RESUMABLE_WINDOW_DAYS = 7;
+  const resumableSince = new Date(Date.now() - RESUMABLE_WINDOW_DAYS * 86_400_000);
+
   const [activeJob, latestJob, discoveredPending, candidates] = await Promise.all([
     PipelineJob.findOne({ activeKey: "pipeline" }).sort({ createdAt: -1 }),
     PipelineJob.findOne().sort({ createdAt: -1 }),
-    Lead.countDocuments({ pipelineStage: "DISCOVERED", optedOut: { $ne: true } }),
+    // Leads that have already failed processing repeatedly are not work this
+    // button can finish. Counting them left "Process N discovered" on screen
+    // permanently, doing nothing each time it was pressed.
+    Lead.countDocuments({
+      pipelineStage: "DISCOVERED",
+      optedOut: { $ne: true },
+      $or: [{ processingAttempts: { $exists: false } }, { processingAttempts: { $lt: 3 } }],
+    }),
     SearchRun.find({
       resumedBy: { $exists: false },
+      startedAt: { $gte: resumableSince },
       $or: [
         { status: { $in: ["PARTIAL", "FAILED"] } },
         { "queries.error": { $exists: true, $nin: [null, ""] } },

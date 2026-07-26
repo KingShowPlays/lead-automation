@@ -1,6 +1,7 @@
 import { getEmailRuntime, type ResolvedEmail } from "../../../config/runtime.js";
 import { logger } from "../../../utils/logger.js";
 import { OutreachLog } from "../../../models/OutreachLog.js";
+import { getSettings } from "../../../models/Settings.js";
 import type { LeadDocument } from "../../../models/Lead.js";
 import type { DraftResult, EmailProviderAdapter, SendResult } from "./types.js";
 import { GmailProvider } from "./gmailProvider.js";
@@ -51,10 +52,38 @@ export async function getActiveEmail(): Promise<ActiveEmail> {
   }
 }
 
+/**
+ * A single deliverable address. Deliberately strict about the things that
+ * actually bounce: spaces, missing parts, a domain with no dot, a trailing dot.
+ */
+const DELIVERABLE = /^[^\s@,;]+@[^\s@,;.]+(?:\.[^\s@,;.]+)+$/;
+
 function guardLead(lead: LeadDocument): void {
   if (!lead.email) throw new Error(`Lead ${lead.businessName} has no email address`);
+  // Sending to a malformed address is a guaranteed bounce, and bounces cost
+  // sender reputation that takes weeks to rebuild. Refuse before the provider
+  // has to.
+  if (!DELIVERABLE.test(lead.email.trim())) {
+    throw new Error(`Lead ${lead.businessName} has a malformed email address (${lead.email})`);
+  }
   if (!lead.pitchSubject || !lead.pitchMessage) throw new Error(`Lead ${lead.businessName} has no pitch yet`);
   if (lead.optedOut) throw new Error(`Lead ${lead.businessName} has opted out`);
+}
+
+/**
+ * The daily cap, enforced here rather than at the call sites.
+ *
+ * It used to be checked in the send route only, so the follow-up scheduler and
+ * every other caller could push past it independently. A cap that one path can
+ * ignore is not a cap, and the cost of exceeding it is the sending domain's
+ * reputation.
+ */
+async function guardDailyCap(): Promise<void> {
+  const settings = await getSettings();
+  const sentToday = await emailsSentToday();
+  if (sentToday >= settings.dailyEmailCap) {
+    throw new Error(`Daily email cap reached (${sentToday}/${settings.dailyEmailCap})`);
+  }
 }
 
 /**
@@ -106,6 +135,7 @@ export async function createDraftForLead(
 /** Sends the approved pitch (via stored provider draft when one exists). */
 export async function sendPitchForLead(lead: LeadDocument): Promise<SendResult & { provider: string }> {
   guardLead(lead);
+  await guardDailyCap();
   const { provider, runtime } = await getActiveEmail();
   if (!provider) throw new Error("No email provider is configured");
 
@@ -131,6 +161,7 @@ export async function sendEmail(opts: {
   body: string;
   threadId?: string;
 }): Promise<SendResult & { provider: string }> {
+  await guardDailyCap();
   const { provider, runtime } = await getActiveEmail();
   if (!provider) throw new Error("No email provider is configured");
   const result = await provider.send({

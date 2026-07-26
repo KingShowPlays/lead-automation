@@ -13,8 +13,14 @@ import type {
   TestResult,
 } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+/**
+ * Every call goes through the dashboard's own server, which attaches the API
+ * key out of reach of the browser. Nothing here may read NEXT_PUBLIC_API_KEY:
+ * Next inlines those into the client bundle, which is how the key used to leak.
+ */
+const API_BASE = "/api/proxy";
+
+import { announceDataChange } from "./live";
 
 class ApiError extends Error {
   constructor(
@@ -26,19 +32,29 @@ class ApiError extends Error {
 }
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  // Paths are written as /api/... against the server; the proxy re-adds that
+  // prefix on the far side, so strip it here rather than at every call site.
+  const res = await fetch(`${API_BASE}${path.replace(/^\/api/, "")}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(API_KEY ? { "x-api-key": API_KEY } : {}),
-      ...init.headers,
-    },
+    headers: { "Content-Type": "application/json", ...init.headers },
     cache: "no-store",
   });
+
+  // A session that expired while the tab was open should send the operator to
+  // sign in again rather than showing a wall of failed requests.
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  }
+
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(res.status, (body as { error?: string }).error ?? `Request failed (${res.status})`);
   }
+
+  // Any successful write changes what every other view is showing. Announcing
+  // it here means no call site can forget to, which is how counters drift.
+  if (init.method && init.method !== "GET") announceDataChange();
+
   return body as T;
 }
 

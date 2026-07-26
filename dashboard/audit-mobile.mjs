@@ -117,6 +117,22 @@ const PROBE = () => {
   });
 };
 
+/**
+ * Sign in first when the deployment has auth turned on, otherwise every route
+ * redirects to the login page and the audit measures that instead.
+ */
+async function signIn(context) {
+  const user = process.env.DASHBOARD_USER;
+  const password = process.env.DASHBOARD_PASSWORD;
+  if (!password) return;
+  const page = await context.newPage();
+  const res = await page.request.post(`${BASE}/api/auth/login`, {
+    data: { username: user ?? "admin", password },
+  });
+  if (!res.ok()) throw new Error(`audit could not sign in: ${res.status()}`);
+  await page.close();
+}
+
 const PREINSTALLED = "/opt/pw-browsers/chromium";
 const browser = await chromium.launch(fs.existsSync(PREINSTALLED) ? { executablePath: PREINSTALLED } : {});
 const findings = [];
@@ -130,6 +146,7 @@ for (const width of WIDTHS) {
     isMobile: width < 768,
     hasTouch: width < 768,
   });
+  await signIn(context);
   const page = await context.newPage();
 
   for (const route of ROUTES) {

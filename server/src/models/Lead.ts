@@ -122,6 +122,11 @@ export interface LeadDocument extends Document {
   /** Set when the real site was found behind a link page or bio. */
   websiteFoundVia?: string;
 
+  /** How many times processing has thrown for this lead. */
+  processingAttempts: number;
+  /** What it threw last, so a stuck lead can be diagnosed without the logs. */
+  lastProcessingError?: string;
+
   // Recency and activity
   /** NEW / EMERGING / ESTABLISHED, inferred from review count and opening status. */
   maturity: string;
@@ -275,6 +280,8 @@ const leadSchema = new Schema<LeadDocument>(
       default: [],
     },
     websiteFoundVia: String,
+    processingAttempts: { type: Number, default: 0 },
+    lastProcessingError: String,
 
     maturity: { type: String, default: "UNKNOWN", index: true },
     firstSeenAt: Date,

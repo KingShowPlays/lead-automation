@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RiInboxUnarchiveLine, RiRefreshLine, RiMailLine, RiInstagramLine, RiInboxArchiveLine } from "react-icons/ri";
 import { api } from "@/lib/api";
+import { useLiveData } from "@/lib/live";
 import type { Lead } from "@/lib/types";
 import { QueueCard } from "@/components/QueueCard";
 
@@ -41,7 +42,7 @@ export default function QueuePage() {
     };
   }, [channel]);
 
-  useEffect(load, [load]);
+  useLiveData(load, 20000);
 
   const remove = (id: string) => {
     setLeads((previous) => previous?.filter((lead) => lead._id !== id) ?? null);

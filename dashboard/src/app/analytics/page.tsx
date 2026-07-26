@@ -13,6 +13,7 @@ import {
   RiTrophyLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
+import { useLiveData } from "@/lib/live";
 import type { AnalyticsStats } from "@/lib/types";
 
 const WINDOWS = [
@@ -41,9 +42,7 @@ export default function AnalyticsPage() {
     }
   }, [days]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useLiveData(() => void load(), 30000);
 
   const derived = useMemo(() => {
     if (!stats) return null;

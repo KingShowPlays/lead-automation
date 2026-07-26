@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { RiDeleteBin6Line, RiShieldCheckLine, RiLoader4Line, RiForbidLine, RiErrorWarningLine } from "react-icons/ri";
 import { api } from "@/lib/api";
+import { useLiveData } from "@/lib/live";
 import type { SuppressionEntry } from "@/lib/types";
 
 const TYPES = ["EMAIL", "PHONE", "DOMAIN", "INSTAGRAM", "PLACE_ID"];
@@ -29,7 +30,7 @@ export default function SuppressionPage() {
     };
   }, []);
 
-  useEffect(load, [load]);
+  useLiveData(load, 20000);
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
