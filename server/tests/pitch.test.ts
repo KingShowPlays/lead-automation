@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPitchResult,
   buildPrompt,
   parsePitchJson,
   suggestedSolutionFor,
   templatePitch,
   type PitchContext,
 } from "../src/services/pitch/generatePitch.js";
+import { Lead } from "../src/models/Lead.js";
 
 const ctx: PitchContext = {
   businessName: "Crystal Scents",
@@ -96,5 +98,51 @@ describe("templatePitch (AI fallback)", () => {
   it("never contains unfilled placeholders", () => {
     const pitch = templatePitch(ctx);
     expect(pitch.message).not.toMatch(/\{|\}|undefined|null/);
+  });
+});
+
+describe("applyPitchResult", () => {
+  it("clears a stale fallback warning when AI generation succeeds", () => {
+    const lead = new Lead({
+      businessName: "Recovered Lead",
+      businessNameNormalized: "recovered lead",
+      category: "restaurants",
+      city: "Accra",
+      googlePlaceId: "recovered-pitch",
+      pitchFallbackReason: "old provider failure",
+    });
+
+    applyPitchResult(lead, {
+      observation: "A specific observation",
+      subject: "Fresh subject",
+      message: "Fresh AI-generated message",
+      provider: "openai",
+      model: "gpt-test",
+    });
+
+    expect(lead.pitchFallbackReason).toBeUndefined();
+    expect(lead.toObject()).not.toHaveProperty("pitchFallbackReason");
+    expect(lead.pitchModel).toBe("openai/gpt-test");
+  });
+
+  it("stores the fallback reason when a template is used", () => {
+    const lead = new Lead({
+      businessName: "Fallback Lead",
+      businessNameNormalized: "fallback lead",
+      category: "restaurants",
+      city: "Accra",
+      googlePlaceId: "fallback-pitch",
+    });
+
+    applyPitchResult(lead, {
+      observation: "Fallback observation",
+      subject: "Fallback subject",
+      message: "Fallback message",
+      provider: "template",
+      model: "builtin",
+      fallbackReason: "provider unavailable",
+    });
+
+    expect(lead.pitchFallbackReason).toBe("provider unavailable");
   });
 });

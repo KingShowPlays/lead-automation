@@ -6,7 +6,7 @@ import { OutreachLog } from "../models/OutreachLog.js";
 import { getSettings } from "../models/Settings.js";
 import { asyncHandler, validateBody } from "../middleware/index.js";
 import { processLead } from "../services/pipeline/runPipeline.js";
-import { generatePitch, pitchContextFromLead } from "../services/pitch/generatePitch.js";
+import { applyPitchResult, generatePitch, pitchContextFromLead } from "../services/pitch/generatePitch.js";
 import { scoreLead } from "../services/scoring/leadScore.js";
 import { optOutLead } from "../services/suppression.js";
 import { createDraftForLead, emailsSentToday, getActiveEmail, sendPitchForLead } from "../services/outreach/email/index.js";
@@ -550,13 +550,8 @@ leadsRouter.post(
     if (!lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.optedOut) return res.status(409).json({ error: "Lead has opted out" });
 
-    const pitch = await generatePitch(pitchContextFromLead(lead));
-    lead.personalisedObservation = pitch.observation;
-    lead.pitchSubject = pitch.subject;
-    lead.pitchMessage = pitch.message;
-    lead.pitchGeneratedAt = new Date();
-    lead.pitchModel = `${pitch.provider}/${pitch.model}`;
-    lead.pitchFallbackReason = pitch.fallbackReason;
+    const pitch = await generatePitch(pitchContextFromLead(lead), { forceProviderAttempt: true });
+    applyPitchResult(lead, pitch);
     if (lead.pipelineStage === "QUALIFIED") {
       lead.pipelineStage = "PENDING_APPROVAL";
       lead.approval.status = "PENDING";

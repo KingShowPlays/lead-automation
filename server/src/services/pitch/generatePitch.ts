@@ -166,7 +166,7 @@ function activeCircuitFor(ai: ResolvedAi): { until: number; reason: string } | n
   return null;
 }
 
-function openCircuit(ai: ResolvedAi, err: unknown): void {
+export function recordAiProviderFailure(ai: ResolvedAi, err: unknown): void {
   const providerError = err instanceof AiProviderError ? err : null;
   const duration =
     providerError?.status === 429
@@ -176,6 +176,20 @@ function openCircuit(ai: ResolvedAi, err: unknown): void {
         : AI_TRANSIENT_CIRCUIT_MS;
   const reason = err instanceof Error ? err.message : String(err);
   aiCircuits.set(runtimeKey(ai), { until: Date.now() + duration, reason });
+}
+
+export function clearAiCircuit(ai: ResolvedAi): void {
+  aiCircuits.delete(runtimeKey(ai));
+}
+
+/**
+ * A successful explicit connection test is stronger evidence than elapsed
+ * time: close the circuit and release its request cooldown while retaining
+ * the reduced adaptive pace.
+ */
+export function recordAiProviderProbeSuccess(ai: ResolvedAi): void {
+  clearAiCircuit(ai);
+  aiLimiters.get(runtimeKey(ai))?.clearCooldown();
 }
 
 /**
@@ -389,14 +403,37 @@ export async function runAiPromptWithRetry(
 }
 
 /** Main entry: generate a personalised pitch for a lead. Never throws. */
-export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
+export interface GeneratePitchOptions {
+  /** Explicit human retry: probe the provider even while the bulk-work circuit is open. */
+  forceProviderAttempt?: boolean;
+}
+
+export function applyPitchResult(lead: LeadDocument, pitch: PitchResult): void {
+  lead.personalisedObservation = pitch.observation;
+  lead.pitchSubject = pitch.subject;
+  lead.pitchMessage = pitch.message;
+  lead.pitchGeneratedAt = new Date();
+  lead.pitchModel = `${pitch.provider}/${pitch.model}`;
+  if (pitch.fallbackReason) {
+    lead.pitchFallbackReason = pitch.fallbackReason;
+  } else {
+    // Explicitly mark the old fallback path for $unset on save. This prevents
+    // a recovered AI pitch from retaining a stale warning in API responses.
+    lead.set("pitchFallbackReason", undefined);
+  }
+}
+
+export async function generatePitch(
+  ctx: PitchContext,
+  options: GeneratePitchOptions = {},
+): Promise<PitchResult> {
   const ai = await getAiRuntime();
   if (!ai.configured) {
     logger.info({ business: ctx.businessName }, "No AI provider configured, using template pitch");
     return templatePitch(ctx);
   }
 
-  const activeCircuit = activeCircuitFor(ai);
+  const activeCircuit = options.forceProviderAttempt ? null : activeCircuitFor(ai);
   if (activeCircuit) {
     const retryInSeconds = Math.max(1, Math.ceil((activeCircuit.until - Date.now()) / 1_000));
     const fallbackReason = `AI provider cooling down for ${retryInSeconds}s after: ${activeCircuit.reason}`;
@@ -410,7 +447,7 @@ export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
   const prompt = buildPrompt(ctx);
   try {
     const result = await runAiPromptWithRetry(prompt, ai);
-    aiCircuits.delete(runtimeKey(ai));
+    clearAiCircuit(ai);
     const parsed = parsePitchJson(result.text);
     return {
       subject: parsed.subject,
@@ -421,7 +458,7 @@ export async function generatePitch(ctx: PitchContext): Promise<PitchResult> {
     };
   } catch (err) {
     const fallbackReason = err instanceof Error ? err.message : String(err);
-    openCircuit(ai, err);
+    recordAiProviderFailure(ai, err);
     logger.warn(
       { err: fallbackReason, business: ctx.businessName, provider: ai.provider },
       "AI pitch failed, falling back to template",

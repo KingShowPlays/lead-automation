@@ -91,7 +91,11 @@ export function QueueCard({
       setLead(result.lead);
       setSubject(result.lead.pitchSubject ?? "");
       setMessage(result.lead.pitchMessage ?? "");
-      toast.success("New pitch generated");
+      if (result.pitch.fallbackReason) {
+        toast.error("AI is still unavailable. The template pitch was kept.");
+      } else {
+        toast.success(`New AI pitch generated with ${result.pitch.provider}.`);
+      }
     });
 
   const markContacted = () =>

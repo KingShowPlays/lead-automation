@@ -18,7 +18,7 @@ import { config } from "../config/index.js";
 import { Lead } from "../models/Lead.js";
 import { getSettings } from "../models/Settings.js";
 import { scoreLead, maturityOf, type Maturity } from "../services/scoring/leadScore.js";
-import { generatePitch, pitchContextFromLead } from "../services/pitch/generatePitch.js";
+import { applyPitchResult, generatePitch, pitchContextFromLead } from "../services/pitch/generatePitch.js";
 import { logger } from "../utils/logger.js";
 
 /** Stages owned by a person. Re-scoring must never disturb these. */
@@ -84,11 +84,7 @@ async function main(): Promise<void> {
       if (result.qualified && withPitches && !lead.pitchMessage) {
         lead.outreachChannel = lead.email ? "EMAIL" : lead.instagramUsername ? "INSTAGRAM_MANUAL" : "EMAIL";
         const pitch = await generatePitch(pitchContextFromLead(lead));
-        lead.personalisedObservation = pitch.observation;
-        lead.pitchSubject = pitch.subject;
-        lead.pitchMessage = pitch.message;
-        lead.pitchGeneratedAt = new Date();
-        lead.pitchModel = `${pitch.provider}/${pitch.model}`;
+        applyPitchResult(lead, pitch);
         lead.pipelineStage = "PENDING_APPROVAL";
         lead.approval.status = "PENDING";
       }

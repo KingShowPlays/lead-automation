@@ -92,7 +92,10 @@ export const api = {
   recheck: (id: string) => req<{ lead: Lead }>(`/api/leads/${id}/recheck`, { method: "POST", body: "{}" }),
 
   regeneratePitch: (id: string) =>
-    req<{ lead: Lead }>(`/api/leads/${id}/regenerate-pitch`, { method: "POST", body: "{}" }),
+    req<{
+      lead: Lead;
+      pitch: { provider: string; model: string; fallbackReason?: string };
+    }>(`/api/leads/${id}/regenerate-pitch`, { method: "POST", body: "{}" }),
 
   runDiscovery: (cities?: string[], categories?: string[]) =>
     req<{ runId: string; found: number; created: number }>(`/api/pipeline/discover`, {

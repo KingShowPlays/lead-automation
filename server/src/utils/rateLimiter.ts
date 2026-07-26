@@ -50,6 +50,15 @@ export class AdaptiveRateLimiter {
     this.successesSinceLimit = 0;
   }
 
+  /**
+   * Clears only the active cooldown after an explicit health probe succeeds.
+   * The reduced adaptive pace is preserved and must still recover gradually.
+   */
+  clearCooldown(): void {
+    this.blockedUntil = 0;
+    this.nextRequestAt = Math.min(this.nextRequestAt, this.now());
+  }
+
   recordSuccess(): void {
     if (this.multiplier >= 1) return;
     this.successesSinceLimit += 1;

@@ -11,7 +11,11 @@ import {
   isMaskedValue,
   maskSecret,
 } from "../config/runtime.js";
-import { runAiPrompt } from "../services/pitch/generatePitch.js";
+import {
+  recordAiProviderFailure,
+  recordAiProviderProbeSuccess,
+  runAiPrompt,
+} from "../services/pitch/generatePitch.js";
 import { getActiveEmail } from "../services/outreach/email/index.js";
 import { searchPlaces } from "../services/discovery/googlePlaces.js";
 import { reloadScheduler } from "../services/scheduler.js";
@@ -310,6 +314,7 @@ settingsRouter.post(
     try {
       const started = Date.now();
       const result = await runAiPrompt('Reply with exactly the word "OK" and nothing else.', ai);
+      recordAiProviderProbeSuccess(ai);
       res.json({
         ok: true,
         provider: ai.provider,
@@ -318,6 +323,7 @@ settingsRouter.post(
         reply: result.text.slice(0, 80),
       });
     } catch (err) {
+      recordAiProviderFailure(ai, err);
       res.json({ ok: false, provider: ai.provider, model: ai.model, error: err instanceof Error ? err.message : String(err) });
     }
   }),

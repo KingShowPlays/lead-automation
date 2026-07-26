@@ -13,7 +13,7 @@ import {
 import { checkWebsite } from "../websiteChecker/index.js";
 import { enrichLead } from "../enrichment/index.js";
 import { scoreLead, maturityOf } from "../scoring/leadScore.js";
-import { generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
+import { applyPitchResult, generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
 import { normalizeNigerianPhone } from "../../utils/phone.js";
@@ -455,12 +455,7 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
     lead.outreachChannel = lead.email ? "EMAIL" : lead.instagramUsername ? "INSTAGRAM_MANUAL" : "EMAIL";
 
     const pitch = await generatePitch(pitchContextFromLead(lead));
-    lead.personalisedObservation = pitch.observation;
-    lead.pitchSubject = pitch.subject;
-    lead.pitchMessage = pitch.message;
-    lead.pitchGeneratedAt = new Date();
-    lead.pitchModel = `${pitch.provider}/${pitch.model}`;
-    lead.pitchFallbackReason = pitch.fallbackReason;
+    applyPitchResult(lead, pitch);
     aiFallback = Boolean(pitch.fallbackReason);
     lead.pipelineStage = "PENDING_APPROVAL";
     lead.approval.status = "PENDING";
