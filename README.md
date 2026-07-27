@@ -63,7 +63,7 @@ the page. That is what keeps it from flickering.
 ├── server/          Express API + pipeline + scheduler (deploy → Railway service 1)
 ├── dashboard/       Next.js approval dashboard          (deploy → Railway service 2)
 ├── n8n/             Optional importable n8n workflow
-├── docs/            Setup, Railway deploy, architecture, compliance
+├── docs/            Setup, Railway deploy, architecture, compliance, demo videos
 └── docker-compose.yml  Local stack (MongoDB + API + dashboard)
 ```
 
@@ -184,6 +184,7 @@ npm test --workspace server        # ~200 tests: classifier, scoring, extraction
 
 ## Docs
 
+- [docs/demo/](docs/demo/), four screen recordings of the running system, Terminal preset in light and dark, full and cut
 - [docs/SETUP.md](docs/SETUP.md), providers: Google Places, AI (OpenAI/Anthropic/NVIDIA/custom), email (Gmail/Zoho/Resend)
 - [docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md), finding leads earlier than Google Places
 - [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md), step-by-step Railway deployment
