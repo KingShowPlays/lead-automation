@@ -247,7 +247,7 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
             </button>
           )}
           {step === "done" && (
-            <button onClick={() => finish(false)} disabled={busy} className="btn-cta">
+            <button onClick={() => finish(false)} disabled={busy} className="btn-primary">
               {busy ? "Saving…" : "Finish setup"} <RiCheckLine className="h-4 w-4" />
             </button>
           )}

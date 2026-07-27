@@ -114,6 +114,7 @@ export default function OverviewPage() {
       activeJob: job,
       latestJob: job,
       discoveredPending: current?.discoveredPending ?? 0,
+      pitchPending: current?.pitchPending ?? 0,
       resumableRun: current?.resumableRun ?? null,
     }));
   }
@@ -479,14 +480,22 @@ export default function OverviewPage() {
           <Link href="/leads" className="btn-ghost">
             View all leads <RiArrowRightLine className="h-4 w-4" />
           </Link>
-          {(operations?.discoveredPending ?? 0) > 0 && (
+          {/*
+            One button for both kinds of unfinished work, because one job does
+            both. Leads that qualified without a message are the more urgent of
+            the two: they are not in the approval queue and nothing else is
+            looking for them, so without this they are simply lost.
+          */}
+          {((operations?.discoveredPending ?? 0) > 0 || (operations?.pitchPending ?? 0) > 0) && (
             <button onClick={processDiscovered} disabled={pipelineBusy} className="btn-ghost">
               {starting === "PROCESS" ? (
                 <span className="loader-spinner h-4 w-4 border-2 border-slate-400/40 border-t-slate-600" />
               ) : (
                 <RiRestartLine className="h-4 w-4" />
               )}
-              Process {operations?.discoveredPending.toLocaleString()} discovered
+              {(operations?.pitchPending ?? 0) > 0
+                ? `Write ${operations?.pitchPending?.toLocaleString()} pending message${operations?.pitchPending === 1 ? "" : "s"}`
+                : `Process ${operations?.discoveredPending.toLocaleString()} discovered`}
             </button>
           )}
           {operations?.resumableRun && (
@@ -499,7 +508,7 @@ export default function OverviewPage() {
               Resume {operations.resumableRun.recoverableQueries} searches
             </button>
           )}
-          <button onClick={runPipeline} disabled={pipelineBusy || !stats.integrations.googlePlaces} className="btn-cta">
+          <button onClick={runPipeline} disabled={pipelineBusy || !stats.integrations.googlePlaces} className="btn-primary">
             {starting === "FULL" || operations?.activeJob ? (
               <span className="loader-spinner h-4 w-4 border-2 border-white/40 border-t-white" />
             ) : (

@@ -96,6 +96,9 @@ export interface Lead {
   pitchSubject?: string;
   pitchMessage?: string;
   pitchModel?: string;
+  /** Written once for a whole situation, with this business's name filled in. */
+  pitchShared?: boolean;
+  pitchGroupKey?: string;
   pitchFallbackReason?: string;
   outreachChannel: "EMAIL" | "INSTAGRAM_MANUAL" | "WHATSAPP" | "NONE";
   pipelineStage: PipelineStage;
@@ -141,6 +144,8 @@ export interface Stats {
   byCity: Record<string, number>;
   byOutreachStatus: Record<string, number>;
   bySource: Record<string, number>;
+  /** How the approval queue splits by outreach channel. */
+  queueByChannel?: Record<string, number>;
   onboardedAt: string | null;
   recentRuns: Array<{
     _id: string;
@@ -193,6 +198,8 @@ export interface PipelineOperationalStatus {
   activeJob: PipelineJob | null;
   latestJob: PipelineJob | null;
   discoveredPending: number;
+  /** Qualified leads still waiting for a message to be written. */
+  pitchPending?: number;
   resumableRun: {
     runId: string;
     status: string;
@@ -283,6 +290,8 @@ export interface Settings {
   maxResultsPerQuery: number;
   placesRequestsPerMinute: number;
   integrations: IntegrationSettings;
+  /** Optional so a dashboard talking to an older server still typechecks. */
+  pitch?: { reuseAcrossSimilarLeads?: boolean };
   onboardedAt: string | null;
 }
 

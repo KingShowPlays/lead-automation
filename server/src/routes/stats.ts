@@ -171,7 +171,7 @@ statsRouter.get(
   asyncHandler(async (_req, res) => {
     const status = await integrationStatus();
     const settings = await getSettings();
-    const [byStage, byWebsiteType, byCity, byOutreach, bySource, totals, revenue, convertedDealsCount, recentRuns, recentActivity] =
+    const [byStage, byWebsiteType, byCity, byOutreach, bySource, totals, revenue, convertedDealsCount, queueByChannel, recentRuns, recentActivity] =
       await Promise.all([
         Lead.aggregate([{ $group: { _id: "$pipelineStage", count: { $sum: 1 } } }]),
         Lead.aggregate([{ $group: { _id: "$websiteType", count: { $sum: 1 } } }]),
@@ -194,6 +194,14 @@ statsRouter.get(
           { $group: { _id: null, total: { $sum: "$estimatedDealValue" } } },
         ]),
         Lead.countDocuments({ outreachStatus: "CONVERTED", estimatedDealValue: { $gt: 0 } }),
+        // How the approval queue splits by channel. Without this the queue's
+        // filter buttons look broken when one of them is legitimately empty:
+        // the operator presses Email, sees nothing, and concludes the button
+        // does not work rather than that no lead has an address.
+        Lead.aggregate([
+          { $match: { "approval.status": "PENDING", pipelineStage: { $in: ["PENDING_APPROVAL", "APPROVED"] } } },
+          { $group: { _id: "$outreachChannel", count: { $sum: 1 } } },
+        ]),
         SearchRun.find().sort({ startedAt: -1 }).limit(5).lean(),
         OutreachLog.find().sort({ createdAt: -1 }).limit(15).populate("leadId", "businessName city").lean(),
       ]);
@@ -211,6 +219,7 @@ statsRouter.get(
       byCity: toMap(byCity),
       byOutreachStatus: toMap(byOutreach),
       bySource: toMap(bySource),
+      queueByChannel: toMap(queueByChannel),
       onboardedAt: settings.onboardedAt,
       recentRuns,
       recentActivity,

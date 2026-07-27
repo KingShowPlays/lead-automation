@@ -10,6 +10,7 @@ import { applyPitchResult, generatePitch, pitchContextFromLead } from "../servic
 import { scoreLead } from "../services/scoring/leadScore.js";
 import { optOutLead } from "../services/suppression.js";
 import { createDraftForLead, emailsSentToday, getActiveEmail, sendPitchForLead } from "../services/outreach/email/index.js";
+import { assignChannel } from "../services/outreach/channel.js";
 import { normalizeNigerianPhone } from "../utils/phone.js";
 
 export const leadsRouter = Router();
@@ -553,8 +554,13 @@ leadsRouter.post(
     if (!lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.optedOut) return res.status(409).json({ error: "Lead has opted out" });
 
+    // Regenerating is the escape hatch from a shared message, so this path
+    // never reuses one: it always writes this business its own.
+    assignChannel(lead);
     const pitch = await generatePitch(pitchContextFromLead(lead), { forceProviderAttempt: true });
     applyPitchResult(lead, pitch);
+    lead.pitchShared = false;
+    lead.set("pitchGroupKey", undefined);
     if (lead.pipelineStage === "QUALIFIED") {
       lead.pipelineStage = "PENDING_APPROVAL";
       lead.approval.status = "PENDING";

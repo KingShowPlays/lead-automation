@@ -210,6 +210,7 @@ export const NAV_ITEMS = [
   { id: "suppression", label: "Suppression" },
   { id: "site-control", label: "Theme control" },
   { id: "settings", label: "Settings" },
+  { id: "help", label: "Help" },
 ] as const;
 
 /** Overview page sections, with the column span each takes on a wide screen. */

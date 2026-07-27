@@ -43,17 +43,23 @@ async function fetchHtml(url: string, timeoutMs = 12000): Promise<string | null>
  */
 export async function enrichLead(lead: LeadDocument, homepageHtml?: string | null): Promise<void> {
   // ---- Phone from Places ----
-  if (lead.phone && !lead.phoneNormalized) {
-    const normalized = normalizeNigerianPhone(lead.phone);
+  if (lead.phone) {
+    const normalized = lead.phoneNormalized ?? normalizeNigerianPhone(lead.phone);
     if (normalized) {
-      lead.phoneNormalized = normalized;
-      lead.whatsappAvailable = lead.whatsappAvailable || isLikelyMobile(normalized);
-      lead.contactSources.push({
-        field: "phone",
-        value: normalized,
-        source: "google_places",
-        collectedAt: new Date(),
-      });
+      // The WhatsApp flag is set from the number every time, not only the first
+      // time the number is normalised. Discovery already normalises Places
+      // phones, so the old "only if not yet normalised" guard meant this never
+      // ran for a Places lead and every one of them looked unreachable.
+      if (isLikelyMobile(normalized)) lead.whatsappAvailable = true;
+      if (!lead.phoneNormalized) {
+        lead.phoneNormalized = normalized;
+        lead.contactSources.push({
+          field: "phone",
+          value: normalized,
+          source: "google_places",
+          collectedAt: new Date(),
+        });
+      }
     }
   }
 

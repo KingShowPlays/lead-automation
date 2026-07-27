@@ -146,6 +146,10 @@ export interface LeadDocument extends Document {
   pitchGeneratedAt?: Date;
   pitchModel?: string;
   pitchFallbackReason?: string;
+  /** Which situation this message was written for, when it was shared. */
+  pitchGroupKey?: string;
+  /** True when the message came from a group rather than being written alone. */
+  pitchShared?: boolean;
 
   // Outreach / CRM
   outreachChannel: OutreachChannel;
@@ -298,6 +302,8 @@ const leadSchema = new Schema<LeadDocument>(
     pitchGeneratedAt: Date,
     pitchModel: String,
     pitchFallbackReason: String,
+    pitchGroupKey: String,
+    pitchShared: { type: Boolean, default: false },
 
     outreachChannel: { type: String, enum: OUTREACH_CHANNELS, default: "NONE" },
     pipelineStage: { type: String, enum: PIPELINE_STAGES, default: "DISCOVERED", index: true },

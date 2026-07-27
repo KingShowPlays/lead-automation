@@ -240,7 +240,7 @@ function LeadsPageInner() {
             {loading ? <RiLoader4Line className="mr-1 animate-spin" /> : null}
             {data?.total.toLocaleString() ?? "—"} results
           </span>
-          <button onClick={() => setImportOpen(true)} className="btn-cta">
+          <button onClick={() => setImportOpen(true)} className="btn-primary">
             <RiUploadCloud2Line className="h-4 w-4" /> Import leads
           </button>
         </div>

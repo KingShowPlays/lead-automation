@@ -3,8 +3,9 @@ import { logger } from "../../utils/logger.js";
 import { sleep } from "../../utils/async.js";
 import { AdaptiveRateLimiter, parseRetryAfterMs } from "../../utils/rateLimiter.js";
 import { truncate, shortenName } from "../../utils/text.js";
+import { CHANNEL_LABELS } from "../outreach/channel.js";
 import type { LeadDocument } from "../../models/Lead.js";
-import type { PitchResult } from "../../types.js";
+import type { OutreachChannel, PitchResult } from "../../types.js";
 
 /**
  * AI pitch generation. Provider is fully configurable from the dashboard:
@@ -92,7 +93,7 @@ ${ctx.instagramBio ? `Instagram bio: ${truncate(ctx.instagramBio, 200)}` : ""}
 ${ctx.recentPostSummary ? `Recent post/product: ${truncate(ctx.recentPostSummary, 200)}` : ""}
 ${ctx.openingSoon ? "Note: this business recently opened or is opening soon. Congratulate them briefly." : ""}
 Suggested YEAN solution: ${solution}
-Channel: ${ctx.outreachChannel === "EMAIL" ? "email" : "Instagram DM"}
+Channel: ${CHANNEL_LABELS[ctx.outreachChannel as OutreachChannel] ?? "message"}
 
 Rules:
 - Open with a specific, genuine observation about THEIR business (use the website situation${ctx.recentPostSummary ? " or their recent post" : ""}). Never open with "I hope this finds you well".

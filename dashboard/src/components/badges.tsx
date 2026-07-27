@@ -48,11 +48,14 @@ export function IntelligenceScores({
   const resolvedNeed = need ?? 0;
   const resolvedReach = reach ?? 0;
   const resolvedPriority = priority ?? Math.round(resolvedNeed * 0.75 + resolvedReach * 0.25);
+  // A band, not a risk level. A priority of sixty is a good lead, so the middle
+  // band is the accent rather than the warning colour: orange here read as
+  // "something is wrong with this one" when the opposite was true.
   const priorityClass =
     resolvedPriority >= 70
       ? "border-emerald-600 bg-emerald-600 text-white"
       : resolvedPriority >= 50
-        ? "border-cta-500 bg-cta-500 text-white"
+        ? "border-brand-600 bg-brand-600 text-white"
         : "border-slate-500 bg-slate-600 text-white";
   return (
     <div className={`inline-flex shrink-0 items-stretch border border-slate-300 dark:border-slate-700 ${compact ? "text-[10px]" : "text-xs"}`}>

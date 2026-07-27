@@ -10,6 +10,7 @@ import { SearchRun, type SearchRunDocument } from "../../models/SearchRun.js";
 import { logger } from "../../utils/logger.js";
 import {
   discover,
+  pendingPitchFilter,
   processPendingLeads,
   recoverableQueriesForRun,
   resumeDiscoveryRun,
@@ -90,6 +91,7 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
       qualified: number;
       errors: number;
       aiFallbacks: number;
+      message?: string;
     }) => {
       await updateJob(jobId, {
         phase: "PROCESSING",
@@ -99,7 +101,7 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
         "progress.qualified": progress.qualified,
         "progress.processingErrors": progress.errors,
         "progress.aiFallbacks": progress.aiFallbacks,
-        "progress.message": "Checking websites, scoring leads and preparing pitches",
+        "progress.message": progress.message ?? "Checking websites, scoring leads and preparing pitches",
       });
     };
 
@@ -226,6 +228,7 @@ export async function getPipelineOperationalStatus(): Promise<{
   activeJob: PipelineJobDocument | null;
   latestJob: PipelineJobDocument | null;
   discoveredPending: number;
+  pitchPending: number;
   resumableRun: { runId: string; status: string; recoverableQueries: number; startedAt: Date } | null;
 }> {
   // A run that failed weeks ago is not pending work. The right answer then is a
@@ -234,7 +237,7 @@ export async function getPipelineOperationalStatus(): Promise<{
   const RESUMABLE_WINDOW_DAYS = 7;
   const resumableSince = new Date(Date.now() - RESUMABLE_WINDOW_DAYS * 86_400_000);
 
-  const [activeJob, latestJob, discoveredPending, candidates] = await Promise.all([
+  const [activeJob, latestJob, discoveredPending, pitchPending, candidates] = await Promise.all([
     PipelineJob.findOne({ activeKey: "pipeline" }).sort({ createdAt: -1 }),
     PipelineJob.findOne().sort({ createdAt: -1 }),
     // Leads that have already failed processing repeatedly are not work this
@@ -245,6 +248,10 @@ export async function getPipelineOperationalStatus(): Promise<{
       optedOut: { $ne: true },
       $or: [{ processingAttempts: { $exists: false } }, { processingAttempts: { $lt: 3 } }],
     }),
+    // Leads that qualified but never got a message. They are not in the
+    // approval queue and nothing else looks for them, so without this count
+    // they are simply lost.
+    Lead.countDocuments(pendingPitchFilter()),
     SearchRun.find({
       resumedBy: { $exists: false },
       startedAt: { $gte: resumableSince },
@@ -276,7 +283,7 @@ export async function getPipelineOperationalStatus(): Promise<{
     }
   }
 
-  return { activeJob, latestJob, discoveredPending, resumableRun };
+  return { activeJob, latestJob, discoveredPending, pitchPending, resumableRun };
 }
 
 /**

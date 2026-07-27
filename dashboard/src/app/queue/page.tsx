@@ -1,35 +1,69 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { RiInboxUnarchiveLine, RiRefreshLine, RiMailLine, RiInstagramLine, RiInboxArchiveLine } from "react-icons/ri";
+import { useCallback, useMemo, useState } from "react";
+import {
+  RiInboxUnarchiveLine,
+  RiRefreshLine,
+  RiMailLine,
+  RiInstagramLine,
+  RiWhatsappLine,
+  RiInboxArchiveLine,
+  RiErrorWarningLine,
+  RiExpandUpDownLine,
+  RiContractUpDownLine,
+} from "react-icons/ri";
 import { api } from "@/lib/api";
 import { useLiveData } from "@/lib/live";
-import type { Lead } from "@/lib/types";
+import type { Lead, Stats } from "@/lib/types";
 import { QueueCard } from "@/components/QueueCard";
+
+type ChannelFilter = "ALL" | "EMAIL" | "INSTAGRAM_MANUAL" | "WHATSAPP" | "NONE";
+
+/**
+ * The filter reads `outreachChannel`, which is one value per lead. Showing the
+ * count next to each button matters more than it looks: an operator who presses
+ * Email, sees an empty queue and has no count concludes the button is broken,
+ * when the truth is that no lead in the queue has an email address.
+ */
+const CHANNELS: Array<{ id: ChannelFilter; label: string; icon?: React.ComponentType<{ className?: string }> }> = [
+  { id: "ALL", label: "All" },
+  { id: "EMAIL", label: "Email", icon: RiMailLine },
+  { id: "INSTAGRAM_MANUAL", label: "Instagram", icon: RiInstagramLine },
+  { id: "WHATSAPP", label: "WhatsApp", icon: RiWhatsappLine },
+  { id: "NONE", label: "No route", icon: RiErrorWarningLine },
+];
 
 export default function QueuePage() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [channel, setChannel] = useState<"ALL" | "EMAIL" | "INSTAGRAM_MANUAL">("ALL");
+  const [channel, setChannel] = useState<ChannelFilter>("ALL");
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     let cancelled = false;
     setRefreshing(true);
-    api
-      .leads({
+    Promise.all([
+      api.leads({
         approvalStatus: "PENDING",
         stage: "PENDING_APPROVAL,APPROVED",
         sort: "-priority",
         limit: 100,
         channel: channel === "ALL" ? undefined : channel,
-      })
-      .then((result) => {
+      }),
+      api.stats().catch(() => null),
+    ])
+      .then(([result, stats]: [{ items: Lead[]; total: number }, Stats | null]) => {
         if (cancelled) return;
         setLeads(result.items);
         setTotal(result.total);
+        setCounts(stats?.queueByChannel ?? null);
         setError(null);
+        // The first lead opens so the page is useful on arrival; the rest stay
+        // shut so a queue of five hundred is scannable.
+        setExpanded((current) => (current.size === 0 && result.items[0] ? new Set([result.items[0]._id]) : current));
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
@@ -49,6 +83,28 @@ export default function QueuePage() {
     setTotal((value) => Math.max(value - 1, 0));
   };
 
+  const toggle = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const allOpen = useMemo(
+    () => Boolean(leads?.length) && leads!.every((lead) => expanded.has(lead._id)),
+    [leads, expanded],
+  );
+
+  const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(leads?.map((lead) => lead._id) ?? []));
+
+  const countFor = (id: ChannelFilter) =>
+    id === "ALL"
+      ? counts
+        ? Object.values(counts).reduce((sum, value) => sum + value, 0)
+        : null
+      : (counts?.[id] ?? (counts ? 0 : null));
+
   return (
     <div className="page-shell">
       <header className="page-header">
@@ -63,6 +119,10 @@ export default function QueuePage() {
           <span className="status-badge text-brand-600">
             <RiInboxArchiveLine className="mr-1 h-4 w-4" /> {total.toLocaleString()} waiting
           </span>
+          <button type="button" onClick={toggleAll} className="btn-ghost" disabled={!leads?.length}>
+            {allOpen ? <RiContractUpDownLine className="h-4 w-4" /> : <RiExpandUpDownLine className="h-4 w-4" />}
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
           <button type="button" onClick={() => load()} className="btn-ghost" disabled={refreshing}>
             <RiRefreshLine className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
@@ -71,16 +131,17 @@ export default function QueuePage() {
       </header>
 
       <div className="queue-toolbar toolbar min-w-0 justify-between">
-        <div className="queue-channel-filter segmented-control max-w-full overflow-x-auto" aria-label="Filter approval queue by channel">
-          <button type="button" aria-pressed={channel === "ALL"} onClick={() => setChannel("ALL")}>
-            All
-          </button>
-          <button type="button" aria-pressed={channel === "EMAIL"} onClick={() => setChannel("EMAIL")}>
-            <RiMailLine className="mr-1 inline h-3.5 w-3.5" /> Email
-          </button>
-          <button type="button" aria-pressed={channel === "INSTAGRAM_MANUAL"} onClick={() => setChannel("INSTAGRAM_MANUAL")}>
-            <RiInstagramLine className="mr-1 inline h-3.5 w-3.5" /> Instagram
-          </button>
+        <div className="queue-channel-filter segmented-control max-w-full" aria-label="Filter approval queue by channel">
+          {CHANNELS.map(({ id, label, icon: Icon }) => {
+            const count = countFor(id);
+            return (
+              <button key={id} type="button" aria-pressed={channel === id} onClick={() => setChannel(id)}>
+                {Icon && <Icon className="mr-1 inline h-3.5 w-3.5" />}
+                {label}
+                {count !== null && <span className="ml-1.5 tabular-nums opacity-70">{count}</span>}
+              </button>
+            );
+          })}
         </div>
         <p className="min-w-0 break-words text-xs text-slate-500 dark:text-slate-400">
           Highest commercial priority appears first · need qualifies, reach ranks
@@ -96,7 +157,7 @@ export default function QueuePage() {
       {!leads && !error && (
         <div className="mt-6 space-y-5">
           {[...Array(3)].map((_, index) => (
-            <div key={index} className="skeleton-block h-80" />
+            <div key={index} className="skeleton-block h-40" />
           ))}
         </div>
       )}
@@ -106,16 +167,28 @@ export default function QueuePage() {
           <div className="empty-state-icon">
             <RiInboxUnarchiveLine />
           </div>
-          <h2 className="mt-4 font-heading text-xl font-extrabold">Queue is clear</h2>
+          <h2 className="mt-4 font-heading text-xl font-extrabold">
+            {channel === "ALL" ? "Queue is clear" : "Nothing on this channel"}
+          </h2>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-            No pitches are waiting for this channel. Run discovery from the overview or switch the queue filter.
+            {channel === "ALL"
+              ? "No pitches are waiting. Run a scan from the overview to find more businesses."
+              : "No lead in the queue is reachable this way. Try another channel, or check that enrichment found contacts on your last scan."}
           </p>
         </div>
       )}
 
       <div className="queue-list mt-6 min-w-0 max-w-full space-y-5">
         {leads?.map((lead, index) => (
-          <QueueCard key={lead._id} lead={lead} onDone={remove} position={index + 1} total={leads.length} />
+          <QueueCard
+            key={lead._id}
+            lead={lead}
+            onDone={remove}
+            position={index + 1}
+            total={leads.length}
+            open={expanded.has(lead._id)}
+            onToggle={toggle}
+          />
         ))}
       </div>
     </div>

@@ -209,7 +209,7 @@ export default function SettingsPage() {
           >
             <RiRestartLine className="h-4 w-4" /> Re-run setup
           </button>
-          <button onClick={() => void save()} disabled={busy} className="btn-cta">
+          <button onClick={() => void save()} disabled={busy} className="btn-primary">
             <RiSaveLine className="h-4 w-4" /> {busy ? "Saving…" : "Save changes"}
           </button>
         </div>
@@ -311,6 +311,25 @@ export default function SettingsPage() {
             placeholder="https://integrate.api.nvidia.com/v1"
           />
           <TestButton label="Test AI" run={api.testAi} beforeTest={save} />
+
+          <label className="flex cursor-pointer items-start justify-between gap-4 border border-slate-200 p-4 dark:border-slate-800">
+            <span className="min-w-0">
+              <span className="font-heading text-sm font-bold">Share one message per situation</span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                A scan of several hundred businesses usually contains a dozen or so distinct situations, so this writes
+                one message for each and fills in the business name and city per lead, instead of paying for a call per
+                lead. Anything with its own Instagram bio or recent post is always written individually, and Regenerate
+                gives any lead a message of its own.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0 accent-brand-600"
+              checked={settings.pitch?.reuseAcrossSimilarLeads !== false}
+              onChange={(e) => upd({ pitch: { ...(settings.pitch ?? {}), reuseAcrossSimilarLeads: e.target.checked } })}
+            />
+          </label>
+
           <p className="text-xs leading-relaxed text-slate-400">
             AI calls are globally paced and automatically slow down after a 429. If the provider still fails after
             retries, the engine uses a template and reports the fallback in pipeline progress.
@@ -651,7 +670,7 @@ export default function SettingsPage() {
 
       {/* Sticky save on mobile */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/60 bg-white/80 p-3 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/80 lg:hidden">
-        <button onClick={() => void save()} disabled={busy} className="btn-cta w-full justify-center">
+        <button onClick={() => void save()} disabled={busy} className="btn-primary w-full justify-center">
           <RiSaveLine className="h-4 w-4" /> {busy ? "Saving…" : "Save changes"}
         </button>
       </div>

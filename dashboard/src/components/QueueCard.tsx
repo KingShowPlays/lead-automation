@@ -6,6 +6,7 @@ import {
   RiMailLine,
   RiInstagramLine,
   RiWhatsappLine,
+  RiPhoneLine,
   RiGlobalLine,
   RiMapPin2Line,
   RiCheckLine,
@@ -17,9 +18,12 @@ import {
   RiLoader4Line,
   RiTimeLine,
   RiErrorWarningLine,
+  RiArrowDownSLine,
+  RiGroupLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import type { Lead } from "@/lib/types";
+import { CHANNEL_LABELS, MESSAGE_LABELS, contactRoutes, whatsappLink, whatsappNumber } from "@/lib/contacts";
 import { IntelligenceScores, MaturityBadge, SourceBadge, WebsiteTypeBadge } from "./badges";
 
 export function QueueCard({
@@ -27,11 +31,16 @@ export function QueueCard({
   onDone,
   position,
   total,
+  open,
+  onToggle,
 }: {
   lead: Lead;
   onDone: (id: string) => void;
   position?: number;
   total?: number;
+  /** Controlled by the page so it can expand or collapse the whole list. */
+  open: boolean;
+  onToggle: (id: string) => void;
 }) {
   const [lead, setLead] = useState(initial);
   const [subject, setSubject] = useState(initial.pitchSubject ?? "");
@@ -57,6 +66,11 @@ export function QueueCard({
     setLead(updated);
   }
 
+  const channel = lead.outreachChannel;
+  const emailChannel = channel === "EMAIL" && Boolean(lead.email);
+  const routes = contactRoutes(lead);
+  const waNumber = whatsappNumber(lead);
+
   const approve = () =>
     run(
       "approve",
@@ -70,7 +84,7 @@ export function QueueCard({
         else if (result.draftError) toast.success(`Approved. ${result.draftError}`);
         else toast.success("Approved");
         setLead(result.lead);
-        if (lead.outreachChannel !== "EMAIL") onDone(lead._id);
+        if (!emailChannel) onDone(lead._id);
       },
     );
 
@@ -94,28 +108,28 @@ export function QueueCard({
       if (result.pitch.fallbackReason) {
         toast.error("AI is still unavailable. The template pitch was kept.");
       } else {
-        toast.success(`New AI pitch generated with ${result.pitch.provider}.`);
+        toast.success(`New pitch written for this business with ${result.pitch.provider}.`);
       }
     });
 
-  const markContacted = () =>
-    run("contacted", () => api.markContacted(lead._id, "INSTAGRAM_MANUAL"), () => {
+  const markContacted = (via: "INSTAGRAM_MANUAL" | "WHATSAPP") =>
+    run("contacted", () => api.markContacted(lead._id, via), () => {
       toast.success("Marked as contacted");
       onDone(lead._id);
     });
 
   function copyMessage() {
     navigator.clipboard.writeText(message).then(
-      () => toast.success("Message copied. Paste it in the DM."),
+      () => toast.success("Message copied."),
       () => toast.error("Copy failed"),
     );
   }
 
   const isApproved = lead.approval.status === "APPROVED";
-  const emailChannel = lead.outreachChannel === "EMAIL" && Boolean(lead.email);
   const priority = lead.priorityScore ?? Math.round((lead.needScore ?? lead.leadScore) * 0.75 + (lead.reachScore ?? 0) * 0.25);
-  const accent = priority >= 70 ? "border-l-emerald-500" : priority >= 50 ? "border-l-cta-500" : "border-l-slate-500";
+  const accent = priority >= 70 ? "border-l-emerald-500" : priority >= 50 ? "border-l-brand-500" : "border-l-slate-500";
   const issueCount = lead.websiteCheck?.issues?.length ?? 0;
+  const bodyId = `queue-body-${lead._id}`;
 
   return (
     <article className={`queue-card glass-card w-full min-w-0 max-w-full overflow-hidden border-l-4 ${accent}`}>
@@ -130,14 +144,39 @@ export function QueueCard({
                 Review {position} of {total}
               </p>
             )}
-            <h2 className="break-words font-heading text-xl font-extrabold tracking-tight sm:truncate">{lead.businessName}</h2>
-            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+            {/*
+              The whole heading is the toggle. A separate chevron would be a
+              small target on a phone, and the title is the thing an operator
+              reaches for when scanning a long queue.
+            */}
+            <button
+              type="button"
+              onClick={() => onToggle(lead._id)}
+              aria-expanded={open}
+              aria-controls={bodyId}
+              className="queue-card-toggle flex w-full min-w-0 items-start gap-2 text-left"
+            >
+              <RiArrowDownSLine
+                className={`mt-1 h-5 w-5 shrink-0 text-slate-400 transition-transform duration-theme ease-theme ${open ? "" : "-rotate-90"}`}
+                aria-hidden
+              />
+              <h2 className="min-w-0 break-words font-heading text-xl font-extrabold tracking-tight">{lead.businessName}</h2>
+            </button>
+            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-xs text-slate-500 dark:text-slate-400">
               <span className="min-w-0 break-words capitalize">{lead.category}</span>
               <span className="inline-flex min-w-0 items-center gap-1 break-words">
                 <RiMapPin2Line className="shrink-0" /> {lead.city}
               </span>
-              <span className="min-w-0 break-words font-bold text-slate-700 dark:text-slate-200">{lead.outreachChannel.replaceAll("_", " ")}</span>
             </p>
+            {/*
+              Contact routes are shown whether the card is open or shut, and on
+              every lead. Which routes exist is the first thing that decides
+              whether a lead is workable at all, so it does not belong behind a
+              disclosure.
+            */}
+            <div className="mt-2 pl-7">
+              <ContactRoutes lead={lead} routes={routes} />
+            </div>
           </div>
         </div>
         <div className="queue-card-badges flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:w-auto sm:max-w-full sm:justify-end">
@@ -148,178 +187,277 @@ export function QueueCard({
         </div>
       </div>
 
-      <div className="queue-card-body grid min-w-0 lg:grid-cols-12">
-        <aside className="min-w-0 overflow-hidden border-b border-slate-200 p-4 sm:p-5 lg:col-span-4 lg:border-b-0 lg:border-r dark:border-slate-800">
-          <div className="section-heading">
-            <div>
-              <h3 className="section-title">Lead intelligence</h3>
-              <p className="section-description">Why the business qualified and how to reach it.</p>
-            </div>
-          </div>
-
-          {lead.websiteProblemSummary && (
-            <div className="break-words border-l-4 border-brand-600 bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere] dark:bg-slate-800/60 dark:text-slate-300">
-              {lead.websiteProblemSummary}
-            </div>
-          )}
-
-          <div className="queue-contact-chips mt-4 flex min-w-0 flex-wrap gap-2 text-xs">
-            {lead.email && <Chip icon={<RiMailLine />} text={lead.email} />}
-            {lead.instagramUsername && (
-              <a href={lead.instagramUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
-                <Chip icon={<RiInstagramLine />} text={`@${lead.instagramUsername}`} link />
-              </a>
-            )}
-            {lead.whatsappAvailable && lead.phoneNormalized && <Chip icon={<RiWhatsappLine />} text={lead.phoneNormalized} />}
-            {lead.websiteUrl && (
-              <a href={lead.websiteUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
-                <Chip icon={<RiGlobalLine />} text={shortUrl(lead.websiteUrl)} link />
-              </a>
-            )}
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 border border-slate-200 text-xs dark:border-slate-800">
-            <AuditMetric label="HTTP" value={lead.websiteCheck?.httpStatus?.toString() ?? "—"} />
-            <AuditMetric label="Response" value={lead.websiteCheck?.responseTimeMs ? `${lead.websiteCheck.responseTimeMs}ms` : "—"} />
-            <AuditMetric label="Reviews" value={(lead.userRatingCount ?? 0).toString()} />
-            <AuditMetric label="Growth/week" value={lead.ratingVelocity != null ? lead.ratingVelocity.toFixed(1) : "—"} />
-          </div>
-
-          {(lead.needBreakdown?.length ?? 0) > 0 && (
-            <div className="mt-5">
-              <p className="label">Why this lead needs the work</p>
-              <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
-                {lead.needBreakdown.map((item) => (
-                  <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
-                    <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
-                    <span className={`shrink-0 font-extrabold tabular-nums ${item.points > 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                      {item.points > 0 ? `+${item.points}` : item.points}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(lead.reachBreakdown?.length ?? 0) > 0 && (
-            <div className="mt-5">
-              <p className="label">How to reach them</p>
-              <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
-                {lead.reachBreakdown.map((item) => (
-                  <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
-                    <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
-                    <span className="shrink-0 font-extrabold tabular-nums text-brand-600">+{item.points}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {issueCount > 0 && (
-            <div className="mt-5 border border-cta-500/40 bg-cta-500/5 p-3 text-xs text-slate-600 dark:text-slate-300">
-              <p className="flex items-center gap-2 font-bold text-cta-600 dark:text-cta-400">
-                <RiErrorWarningLine /> Website issues
-              </p>
-              <p className="mt-1 break-words leading-relaxed [overflow-wrap:anywhere]">{lead.websiteCheck?.issues?.join(", ").toLowerCase().replaceAll("_", " ")}</p>
-            </div>
-          )}
-        </aside>
-
-        <section className="min-w-0 overflow-hidden p-4 sm:p-5 lg:col-span-8">
-          <div className="section-heading">
-            <div>
-              <h3 className="section-title">Pitch review</h3>
-              <p className="section-description">Edit the message before approval. Changes save automatically when approved.</p>
-            </div>
-            {lead.pitchFallbackReason ? (
-              <span className="status-badge text-amber-600">Template fallback</span>
-            ) : (
-              lead.pitchModel && <span className="status-badge text-purple-600">AI · {lead.pitchModel}</span>
-            )}
-          </div>
-
-          {lead.pitchFallbackReason && (
-            <p className="mb-4 break-words border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
-              The AI provider was unavailable, so this lead has a safe template pitch. You can regenerate it after the
-              provider recovers.
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {emailChannel && (
+      {open && (
+        <div id={bodyId} className="queue-card-body grid min-w-0 lg:grid-cols-12">
+          <aside className="min-w-0 overflow-hidden border-b border-slate-200 p-4 sm:p-5 lg:col-span-4 lg:border-b-0 lg:border-r dark:border-slate-800">
+            <div className="section-heading">
               <div>
-                <label className="label" htmlFor={`subj-${lead._id}`}>
-                  Subject
-                </label>
-                <input
-                  id={`subj-${lead._id}`}
-                  className="input font-semibold"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </div>
-            )}
-            <div>
-              <label className="label" htmlFor={`msg-${lead._id}`}>
-                {emailChannel ? "Email message" : "Instagram DM"}
-              </label>
-              <textarea
-                id={`msg-${lead._id}`}
-                className="input min-h-56 min-w-0 max-w-full resize-y leading-relaxed"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-                <span>{message.trim().split(/\s+/).filter(Boolean).length} words</span>
-                {dirty && <span className="font-bold text-cta-500">Edited · saves on approval</span>}
+                <h3 className="section-title">Lead intelligence</h3>
+                <p className="section-description">Why the business qualified and how to reach it.</p>
               </div>
             </div>
-          </div>
 
-          <div className="queue-actions flex flex-wrap items-center gap-2">
-            {!isApproved && (
-              <button onClick={approve} disabled={busy !== null} className="btn-primary">
-                {busy === "approve" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
-                {busy === "approve" ? "Approving…" : "Approve"}
-              </button>
+            {lead.websiteProblemSummary && (
+              <div className="break-words border-l-4 border-brand-600 bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere] dark:bg-slate-800/60 dark:text-slate-300">
+                {lead.websiteProblemSummary}
+              </div>
             )}
-            {isApproved && emailChannel && (
-              <button onClick={sendNow} disabled={busy !== null} className="btn-cta">
-                {busy === "send" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiSendPlaneFill className="h-4 w-4" />}
-                {busy === "send" ? "Sending…" : "Send email"}
-              </button>
-            )}
-            {!emailChannel && lead.instagramUrl && (
-              <>
-                <a href={lead.instagramUrl} target="_blank" rel="noreferrer" className="btn-primary">
-                  <RiExternalLinkLine className="h-4 w-4" /> Open profile
+
+            <div className="queue-contact-chips mt-4 flex min-w-0 flex-wrap gap-2 text-xs">
+              {lead.email && <Chip icon={<RiMailLine />} text={lead.email} />}
+              {lead.instagramUsername && (
+                <a href={lead.instagramUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
+                  <Chip icon={<RiInstagramLine />} text={`@${lead.instagramUsername}`} link />
                 </a>
-                <button onClick={copyMessage} className="btn-ghost">
-                  <RiFileCopyLine className="h-4 w-4" /> Copy message
-                </button>
-                <button onClick={markContacted} disabled={busy !== null} className="btn-cta">
-                  {busy === "contacted" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
-                  {busy === "contacted" ? "Saving…" : "Mark contacted"}
-                </button>
-              </>
+              )}
+              {waNumber && <Chip icon={<RiWhatsappLine />} text={waNumber} />}
+              {!waNumber && lead.phone && <Chip icon={<RiPhoneLine />} text={lead.phone} />}
+              {lead.websiteUrl && (
+                <a href={lead.websiteUrl} target="_blank" rel="noreferrer" className="min-w-0 max-w-full">
+                  <Chip icon={<RiGlobalLine />} text={shortUrl(lead.websiteUrl)} link />
+                </a>
+              )}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 border border-slate-200 text-xs dark:border-slate-800">
+              <AuditMetric label="HTTP" value={lead.websiteCheck?.httpStatus?.toString() ?? "—"} />
+              <AuditMetric label="Response" value={lead.websiteCheck?.responseTimeMs ? `${lead.websiteCheck.responseTimeMs}ms` : "—"} />
+              <AuditMetric label="Reviews" value={(lead.userRatingCount ?? 0).toString()} />
+              <AuditMetric label="Growth/week" value={lead.ratingVelocity != null ? lead.ratingVelocity.toFixed(1) : "—"} />
+            </div>
+
+            {(lead.needBreakdown?.length ?? 0) > 0 && (
+              <div className="mt-5">
+                <p className="label">Why this lead needs the work</p>
+                <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
+                  {lead.needBreakdown.map((item) => (
+                    <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
+                      <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
+                      <span className={`shrink-0 font-extrabold tabular-nums ${item.points > 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                        {item.points > 0 ? `+${item.points}` : item.points}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <button onClick={regenerate} disabled={busy !== null} className="btn-ghost">
-              {busy === "regen" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiSparkling2Line className="h-4 w-4" />}
-              Regenerate
-            </button>
-            <button onClick={reject} disabled={busy !== null} className="btn-ghost !border-rose-300 !text-rose-500 hover:!bg-rose-500/10">
-              {busy === "reject" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCloseLine className="h-4 w-4" />}
-              Reject
-            </button>
-            {lead.followUpAt && (
-              <span className="queue-follow-up ml-auto inline-flex min-w-0 items-center gap-1 break-words text-xs text-slate-400">
-                <RiTimeLine className="shrink-0" /> Follow-up {new Date(lead.followUpAt).toLocaleDateString("en-NG")}
-              </span>
+
+            {(lead.reachBreakdown?.length ?? 0) > 0 && (
+              <div className="mt-5">
+                <p className="label">How to reach them</p>
+                <ul className="divide-y divide-slate-200 border-y border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
+                  {lead.reachBreakdown.map((item) => (
+                    <li key={item.rule} className="flex min-w-0 justify-between gap-3 py-2">
+                      <span className="min-w-0 break-words text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{item.rule}</span>
+                      <span className="shrink-0 font-extrabold tabular-nums text-brand-600">+{item.points}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-          </div>
-        </section>
-      </div>
+
+            {issueCount > 0 && (
+              <div className="mt-5 border border-cta-500/40 bg-cta-500/5 p-3 text-xs text-slate-600 dark:text-slate-300">
+                <p className="flex items-center gap-2 font-bold text-cta-600 dark:text-cta-400">
+                  <RiErrorWarningLine /> Website issues
+                </p>
+                <p className="mt-1 break-words leading-relaxed [overflow-wrap:anywhere]">
+                  {lead.websiteCheck?.issues?.join(", ").toLowerCase().replaceAll("_", " ")}
+                </p>
+              </div>
+            )}
+          </aside>
+
+          <section className="min-w-0 overflow-hidden p-4 sm:p-5 lg:col-span-8">
+            <div className="section-heading">
+              <div>
+                <h3 className="section-title">Pitch review</h3>
+                <p className="section-description">Edit the message before approval. Changes save automatically when approved.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {lead.pitchShared && (
+                  <span className="status-badge text-slate-500" title="Written once for every business in this situation, with the name and city filled in per lead. Regenerate writes this one its own.">
+                    <RiGroupLine className="mr-1 h-3.5 w-3.5" /> Shared message
+                  </span>
+                )}
+                {lead.pitchFallbackReason ? (
+                  <span className="status-badge text-amber-600">Template fallback</span>
+                ) : (
+                  lead.pitchModel && <span className="status-badge text-purple-600">AI · {lead.pitchModel}</span>
+                )}
+              </div>
+            </div>
+
+            {lead.pitchFallbackReason && (
+              <p className="mb-4 break-words border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
+                The AI provider was unavailable, so this lead has a safe template pitch. You can regenerate it after the
+                provider recovers.
+              </p>
+            )}
+
+            {channel === "NONE" && (
+              <p className="mb-4 break-words border border-rose-500/30 bg-rose-500/5 p-3 text-xs leading-relaxed text-rose-600 [overflow-wrap:anywhere] dark:text-rose-400">
+                No email, Instagram handle or mobile number was found for this business, so there is nowhere to send this
+                message yet. Add a contact on the lead page, or open it on Google Maps and check its listing.
+              </p>
+            )}
+
+            <div className="space-y-4">
+              {emailChannel && (
+                <div>
+                  <label className="label" htmlFor={`subj-${lead._id}`}>
+                    Subject
+                  </label>
+                  <input
+                    id={`subj-${lead._id}`}
+                    className="input font-semibold"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="label" htmlFor={`msg-${lead._id}`}>
+                  {MESSAGE_LABELS[channel]}
+                </label>
+                <textarea
+                  id={`msg-${lead._id}`}
+                  className="input min-h-56 min-w-0 max-w-full resize-y leading-relaxed"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                  <span>{message.trim().split(/\s+/).filter(Boolean).length} words</span>
+                  {dirty && <span className="font-bold text-brand-600">Edited · saves on approval</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="queue-actions flex flex-wrap items-center gap-2">
+              {!isApproved && (
+                <button onClick={approve} disabled={busy !== null} className="btn-primary">
+                  {busy === "approve" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
+                  {busy === "approve" ? "Approving…" : "Approve"}
+                </button>
+              )}
+              {isApproved && emailChannel && (
+                <button onClick={sendNow} disabled={busy !== null} className="btn-primary">
+                  {busy === "send" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiSendPlaneFill className="h-4 w-4" />}
+                  {busy === "send" ? "Sending…" : "Send email"}
+                </button>
+              )}
+
+              {channel === "INSTAGRAM_MANUAL" && lead.instagramUrl && (
+                <>
+                  <a href={lead.instagramUrl} target="_blank" rel="noreferrer" className="btn-ghost">
+                    <RiExternalLinkLine className="h-4 w-4" /> Open profile
+                  </a>
+                  <button onClick={copyMessage} className="btn-ghost">
+                    <RiFileCopyLine className="h-4 w-4" /> Copy message
+                  </button>
+                  <button onClick={() => markContacted("INSTAGRAM_MANUAL")} disabled={busy !== null} className="btn-ghost">
+                    {busy === "contacted" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
+                    {busy === "contacted" ? "Saving…" : "Mark contacted"}
+                  </button>
+                </>
+              )}
+
+              {channel === "WHATSAPP" && waNumber && (
+                <>
+                  {/* wa.me carries the message, so the operator only presses send. */}
+                  <a href={whatsappLink(lead, message) ?? "#"} target="_blank" rel="noreferrer" className="btn-ghost">
+                    <RiWhatsappLine className="h-4 w-4" /> Open WhatsApp
+                  </a>
+                  <button onClick={copyMessage} className="btn-ghost">
+                    <RiFileCopyLine className="h-4 w-4" /> Copy message
+                  </button>
+                  <button onClick={() => markContacted("WHATSAPP")} disabled={busy !== null} className="btn-ghost">
+                    {busy === "contacted" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCheckLine className="h-4 w-4" />}
+                    {busy === "contacted" ? "Saving…" : "Mark contacted"}
+                  </button>
+                </>
+              )}
+
+              {channel === "NONE" && lead.googleMapsUrl && (
+                <a href={lead.googleMapsUrl} target="_blank" rel="noreferrer" className="btn-ghost">
+                  <RiExternalLinkLine className="h-4 w-4" /> Open on Google Maps
+                </a>
+              )}
+
+              <button onClick={regenerate} disabled={busy !== null} className="btn-ghost">
+                {busy === "regen" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiSparkling2Line className="h-4 w-4" />}
+                Regenerate
+              </button>
+              <button onClick={reject} disabled={busy !== null} className="btn-ghost !border-rose-300 !text-rose-500 hover:!bg-rose-500/10">
+                {busy === "reject" ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiCloseLine className="h-4 w-4" />}
+                Reject
+              </button>
+              {lead.followUpAt && (
+                <span className="queue-follow-up ml-auto inline-flex min-w-0 items-center gap-1 break-words text-xs text-slate-400">
+                  <RiTimeLine className="shrink-0" /> Follow-up {new Date(lead.followUpAt).toLocaleDateString("en-NG")}
+                </span>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </article>
+  );
+}
+
+const ROUTE_ICONS = {
+  EMAIL: RiMailLine,
+  INSTAGRAM: RiInstagramLine,
+  WHATSAPP: RiWhatsappLine,
+  PHONE: RiPhoneLine,
+} as const;
+
+const ROUTE_LABELS = {
+  EMAIL: "Email",
+  INSTAGRAM: "Instagram",
+  WHATSAPP: "WhatsApp",
+  PHONE: "Phone",
+} as const;
+
+/** Every route into the business, with the one outreach will use marked. */
+function ContactRoutes({ lead, routes }: { lead: Lead; routes: ReturnType<typeof contactRoutes> }) {
+  if (routes.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 border border-rose-300 px-2 py-1 text-[11px] font-bold text-rose-500 dark:border-rose-500/40">
+        <RiErrorWarningLine className="h-3.5 w-3.5 shrink-0" /> No contact route
+      </span>
+    );
+  }
+
+  const using: Record<Lead["outreachChannel"], string | null> = {
+    EMAIL: "EMAIL",
+    INSTAGRAM_MANUAL: "INSTAGRAM",
+    WHATSAPP: "WHATSAPP",
+    NONE: null,
+  };
+
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {routes.map((route) => {
+        const Icon = ROUTE_ICONS[route];
+        const active = using[lead.outreachChannel] === route;
+        return (
+          <span
+            key={route}
+            title={active ? `Outreach will use ${CHANNEL_LABELS[lead.outreachChannel]}` : ROUTE_LABELS[route]}
+            className={`inline-flex items-center gap-1 border px-2 py-1 text-[11px] font-bold ${
+              active
+                ? "border-brand-600 bg-brand-500/10 text-brand-700 dark:text-brand-400"
+                : "border-slate-300 text-slate-500 dark:border-slate-700 dark:text-slate-400"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {ROUTE_LABELS[route]}
+            {active && <RiCheckLine className="h-3 w-3 shrink-0" aria-hidden />}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   RiForbidLine,
   RiSettings4Line,
   RiPaletteLine,
+  RiQuestionLine,
   RiMenuLine,
   RiCloseLine,
   RiArrowLeftSLine,
@@ -31,6 +32,7 @@ const NAV_DEFS: Record<string, { href: string; icon: IconType }> = {
   suppression: { href: "/suppression", icon: RiForbidLine },
   "site-control": { href: "/site-control", icon: RiPaletteLine },
   settings: { href: "/settings", icon: RiSettings4Line },
+  help: { href: "/help", icon: RiQuestionLine },
 };
 
 const NAV_LABELS: Record<string, string> = Object.fromEntries(NAV_ITEMS.map((n) => [n.id, n.label]));

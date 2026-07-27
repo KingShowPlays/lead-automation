@@ -42,6 +42,7 @@ const ROUTES = [
   { path: "/suppression", name: "suppression" },
   { path: "/settings", name: "settings" },
   { path: "/site-control", name: "site control" },
+  { path: "/help", name: "help" },
   {
     path: "/site-control",
     name: "site control, every tab",

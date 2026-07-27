@@ -463,7 +463,7 @@ export default function LeadDetailPage() {
                   {busy === "bounced" ? <RiLoader4Line className="animate-spin" /> : <RiMailCloseLine className="text-rose-400" />} Bounced
                 </button>
                 <button
-                  className="btn-cta justify-start"
+                  className="btn-primary justify-start"
                   disabled={busy !== null}
                   onClick={() => {
                     const value = prompt("Deal value in ₦ (optional):");

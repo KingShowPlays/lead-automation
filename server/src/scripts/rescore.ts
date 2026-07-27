@@ -18,6 +18,7 @@ import { config } from "../config/index.js";
 import { Lead } from "../models/Lead.js";
 import { getSettings } from "../models/Settings.js";
 import { scoreLead, maturityOf, type Maturity } from "../services/scoring/leadScore.js";
+import { assignChannel } from "../services/outreach/channel.js";
 import { applyPitchResult, generatePitch, pitchContextFromLead } from "../services/pitch/generatePitch.js";
 import { logger } from "../utils/logger.js";
 
@@ -82,7 +83,7 @@ async function main(): Promise<void> {
 
       // A newly qualified lead needs a pitch before it can enter the queue.
       if (result.qualified && withPitches && !lead.pitchMessage) {
-        lead.outreachChannel = lead.email ? "EMAIL" : lead.instagramUsername ? "INSTAGRAM_MANUAL" : "EMAIL";
+        assignChannel(lead);
         const pitch = await generatePitch(pitchContextFromLead(lead));
         applyPitchResult(lead, pitch);
         lead.pipelineStage = "PENDING_APPROVAL";

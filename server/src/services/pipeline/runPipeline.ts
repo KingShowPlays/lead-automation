@@ -15,6 +15,8 @@ import { resolveHiddenWebsite } from "../websiteChecker/behindLinkPage.js";
 import { enrichLead } from "../enrichment/index.js";
 import { scoreLead, maturityOf } from "../scoring/leadScore.js";
 import { applyPitchResult, generatePitch, pitchContextFromLead } from "../pitch/generatePitch.js";
+import { PitchGroupCache, type GroupedPitch } from "../pitch/pitchGroups.js";
+import { assignChannel } from "../outreach/channel.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
 import { normalizeNigerianPhone } from "../../utils/phone.js";
@@ -376,8 +378,16 @@ export interface ProcessOutcome {
   aiFallback: boolean;
 }
 
+/** Records a pitch on the lead, keeping track of whether it was shared. */
+function applyPitch(lead: LeadDocument, pitch: GroupedPitch): void {
+  applyPitchResult(lead, pitch);
+  lead.pitchShared = Boolean(pitch.shared);
+  if (pitch.groupKey) lead.pitchGroupKey = pitch.groupKey;
+  else lead.set("pitchGroupKey", undefined);
+}
+
 /** Runs the full check→enrich→score→pitch flow for one lead. */
-export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
+export async function processLead(lead: LeadDocument, pitches?: PitchGroupCache): Promise<ProcessOutcome> {
   const settings = await getSettings();
 
   // 1) Website health check + classification
@@ -494,14 +504,26 @@ export async function processLead(lead: LeadDocument): Promise<ProcessOutcome> {
 
   // 4) Pitch for qualified leads
   if (scoreResult.qualified) {
-    // Channel preference: email if we have one, else manual Instagram.
-    lead.outreachChannel = lead.email ? "EMAIL" : lead.instagramUsername ? "INSTAGRAM_MANUAL" : "EMAIL";
+    assignChannel(lead);
 
-    const pitch = await generatePitch(pitchContextFromLead(lead));
-    applyPitchResult(lead, pitch);
-    aiFallback = Boolean(pitch.fallbackReason);
-    lead.pipelineStage = "PENDING_APPROVAL";
-    lead.approval.status = "PENDING";
+    /*
+     * A pitch failure must not strand the lead. Qualification and drafting used
+     * to be one step, so anything that threw between them left the lead at
+     * QUALIFIED with no message: invisible to the approval queue and picked up
+     * by nothing, since every recovery path looked for DISCOVERED. Five hundred
+     * of them accumulated that way. The stage is now advanced only when there
+     * is a message, and draftPendingPitches finishes the ones that are not.
+     */
+    try {
+      const pitch = pitches ? await pitches.pitchFor(pitchContextFromLead(lead)) : await generatePitch(pitchContextFromLead(lead));
+      applyPitch(lead, pitch);
+      aiFallback = Boolean(pitch.fallbackReason);
+      lead.pipelineStage = "PENDING_APPROVAL";
+      lead.approval.status = "PENDING";
+    } catch (err) {
+      lead.lastProcessingError = `pitch: ${err instanceof Error ? err.message : String(err)}`.slice(0, 300);
+      logger.warn({ lead: lead.businessName, err: lead.lastProcessingError }, "lead qualified but has no pitch yet");
+    }
   }
 
   await lead.save();
@@ -521,6 +543,8 @@ export interface BatchProcessResult {
   qualified: number;
   disqualified: number;
   aiFallbacks: number;
+  /** Messages written for leads that qualified earlier without one. */
+  drafted?: number;
   errors: Array<{ lead: string; error: string }>;
 }
 
@@ -531,6 +555,8 @@ export interface ProcessingProgress {
   qualified: number;
   errors: number;
   aiFallbacks: number;
+  /** Set when the phase deserves its own wording, such as drafting messages. */
+  message?: string;
 }
 
 export interface ProcessOptions {
@@ -563,6 +589,10 @@ async function processPendingLeadsUnlocked(
     errors: [],
   };
   const checker = await getCheckerRuntime();
+  const settings = await getSettings();
+  // One cache for the whole pass, so leads in the same situation share a
+  // message instead of each buying their own AI call.
+  const pitches = new PitchGroupCache(settings.pitch?.reuseAcrossSimilarLeads !== false);
   const total = Math.min(
     await Lead.countDocuments({ pipelineStage: "DISCOVERED", optedOut: { $ne: true } }),
     batchSize * maxBatches,
@@ -581,7 +611,7 @@ async function processPendingLeadsUnlocked(
       .limit(batchSize);
     if (pending.length === 0) break;
 
-    const outcomes = await mapWithConcurrency(pending, checker.concurrency, async (lead) => processLead(lead));
+    const outcomes = await mapWithConcurrency(pending, checker.concurrency, async (lead) => processLead(lead, pitches));
 
     let failedWholeBatch = true;
     outcomes.forEach((o, i) => {
@@ -626,7 +656,148 @@ async function processPendingLeadsUnlocked(
     if (pending.length < batchSize) break;
   }
 
-  logger.info(result, "batch processing complete");
+  logger.info({ ...result, pitches: pitches.stats }, "batch processing complete");
+
+  // Leads scored under an older channel rule are put right first, so the
+  // messages drafted below are written for the channel they will actually go
+  // out on.
+  await repairOutreachChannels();
+
+  // Anything that qualified without getting a message, here or on an earlier
+  // run, is finished off before the pass is called done.
+  const drafted = await draftPendingPitches({
+    pitches,
+    limit: batchSize * maxBatches,
+    onProgress: options.onProgress
+      ? async (done, draftTotal) => {
+          await Promise.resolve(
+            options.onProgress?.({
+              current: result.processed + result.errors.length + done,
+              total: total + draftTotal,
+              processed: result.processed,
+              qualified: result.qualified,
+              errors: result.errors.length,
+              aiFallbacks: result.aiFallbacks,
+              message: `Writing messages for qualified leads, ${done} of ${draftTotal}`,
+            }),
+          ).catch(() => undefined);
+        }
+      : undefined,
+  });
+  result.drafted = drafted.drafted;
+  result.aiFallbacks += drafted.aiFallbacks;
+
+  return result;
+}
+
+/**
+ * Brings stored outreach channels back in line with the contacts on the lead.
+ *
+ * Runs on every processing pass because the rule that picks a channel is a
+ * moving target: it has been corrected twice, and each correction leaves every
+ * lead scored under the old rule holding an answer nobody would give today. A
+ * cheap idempotent sweep means those leads heal on the next pass instead of
+ * needing a migration, and it costs nothing once everything already agrees.
+ */
+export async function repairOutreachChannels(limit = 5000): Promise<{ checked: number; corrected: number }> {
+  const leads = await Lead.find({
+    pipelineStage: { $in: ["QUALIFIED", "PENDING_APPROVAL"] },
+    optedOut: { $ne: true },
+  })
+    .select("email instagramUsername phone phoneNormalized whatsappAvailable outreachChannel")
+    .limit(limit);
+
+  let corrected = 0;
+  for (const lead of leads) {
+    const before = lead.outreachChannel;
+    const beforeFlag = lead.whatsappAvailable;
+    assignChannel(lead);
+    if (lead.outreachChannel !== before || lead.whatsappAvailable !== beforeFlag) {
+      await Lead.updateOne(
+        { _id: lead._id },
+        { $set: { outreachChannel: lead.outreachChannel, whatsappAvailable: lead.whatsappAvailable } },
+      );
+      corrected++;
+    }
+  }
+
+  if (corrected > 0) logger.info({ checked: leads.length, corrected }, "outreach channels repaired");
+  return { checked: leads.length, corrected };
+}
+
+export interface DraftPendingResult {
+  pending: number;
+  drafted: number;
+  failed: number;
+  aiFallbacks: number;
+  reusedMessages: number;
+}
+
+/** How many leads have qualified but are still waiting for a message. */
+export function pendingPitchFilter(): Record<string, unknown> {
+  return {
+    pipelineStage: "QUALIFIED",
+    optedOut: { $ne: true },
+    $and: [
+      { $or: [{ pitchMessage: { $exists: false } }, { pitchMessage: "" }, { pitchMessage: null }] },
+      { $or: [{ processingAttempts: { $exists: false } }, { processingAttempts: { $lt: 3 } }] },
+    ],
+  };
+}
+
+/**
+ * Writes the missing messages for leads that qualified but never got one.
+ *
+ * This exists because qualifying and drafting can come apart: an AI outage
+ * mid-run, a re-score that moved leads into QUALIFIED without pitching them, a
+ * process that died between the two. Without this, those leads are stranded in
+ * a stage nothing looks at, and the operator sees an empty approval queue while
+ * hundreds of qualified businesses sit behind it.
+ */
+export async function draftPendingPitches(
+  options: { pitches?: PitchGroupCache; limit?: number; onProgress?: (done: number, total: number) => void | Promise<void> } = {},
+): Promise<DraftPendingResult> {
+  const limit = options.limit ?? 500;
+  const settings = await getSettings();
+  const pitches = options.pitches ?? new PitchGroupCache(settings.pitch?.reuseAcrossSimilarLeads !== false);
+
+  const filter = pendingPitchFilter();
+  const pending = await Lead.countDocuments(filter);
+  const result: DraftPendingResult = { pending, drafted: 0, failed: 0, aiFallbacks: 0, reusedMessages: 0 };
+  if (pending === 0) return result;
+
+  const before = pitches.stats.reused;
+  // Highest priority first: if the run is cut short, the best leads are the
+  // ones that made it into the queue.
+  const leads = await Lead.find(filter).sort({ priorityScore: -1, needScore: -1 }).limit(limit);
+
+  for (const lead of leads) {
+    try {
+      assignChannel(lead);
+      const pitch = await pitches.pitchFor(pitchContextFromLead(lead));
+      applyPitch(lead, pitch);
+      lead.pipelineStage = "PENDING_APPROVAL";
+      lead.approval.status = "PENDING";
+      lead.set("lastProcessingError", undefined);
+      if (pitch.fallbackReason) result.aiFallbacks++;
+      await lead.save();
+      result.drafted++;
+    } catch (err) {
+      result.failed++;
+      const message = err instanceof Error ? err.message : String(err);
+      await Lead.updateOne(
+        { _id: lead._id },
+        { $inc: { processingAttempts: 1 }, $set: { lastProcessingError: `pitch: ${message}`.slice(0, 300) } },
+      ).catch(() => undefined);
+      logger.error({ lead: lead.businessName, err: message }, "could not draft a pitch for a qualified lead");
+    }
+    if (options.onProgress) {
+      await Promise.resolve(options.onProgress(result.drafted + result.failed, leads.length)).catch(() => undefined);
+    }
+  }
+
+  result.reusedMessages = pitches.stats.reused - before;
+  logger.info(result, "pending pitches drafted");
   return result;
 }
 

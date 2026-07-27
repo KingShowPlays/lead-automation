@@ -241,16 +241,22 @@ settingsRouter.put(
         maxResultsPerQuery: z.number().int().min(1).max(60).optional(),
         placesRequestsPerMinute: z.number().int().min(1).max(120).optional(),
         integrations: integrationsSchema.optional(),
+        pitch: z.object({ reuseAcrossSimilarLeads: z.boolean().optional() }).strict().optional(),
       })
       .strict(),
   ),
   asyncHandler(async (req, res) => {
     const settings = await getSettings();
     const body = req.body as AnyRecord;
-    const { scoringWeights, integrations, ...rest } = body;
+    const { scoringWeights, integrations, pitch, ...rest } = body;
     Object.assign(settings, rest);
     if (scoringWeights) {
       Object.assign(settings.scoringWeights, scoringWeights);
+    }
+    if (pitch) {
+      // Merged rather than assigned, so a patch carrying one field does not
+      // silently reset the others to their defaults.
+      settings.set("pitch", { ...(settings.pitch ?? {}), ...(pitch as AnyRecord) });
     }
     if (integrations) {
       const current = (settings.integrations ?? {}) as unknown as AnyRecord;

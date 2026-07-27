@@ -75,6 +75,17 @@ export interface IntegrationSettings {
   sources: SourceSettings;
 }
 
+export interface PitchSettings {
+  /**
+   * Write one message per situation and personalise it per business, instead of
+   * one AI call per lead. A scan of several hundred businesses usually contains
+   * only a dozen or so distinct situations, so this is the difference between
+   * hundreds of calls and a handful. Leads carrying their own specifics, an
+   * Instagram bio or a recent post, are always written individually.
+   */
+  reuseAcrossSimilarLeads: boolean;
+}
+
 export interface SettingsDocument extends Document {
   key: "global";
   cities: string[];
@@ -90,6 +101,7 @@ export interface SettingsDocument extends Document {
   /** Project-wide Text Search pacing. Conservative default protects Places quota. */
   placesRequestsPerMinute: number;
   integrations: IntegrationSettings;
+  pitch: PitchSettings;
   /** Set once the first-run onboarding wizard is completed. */
   onboardedAt: Date | null;
   updatedAt: Date;
@@ -187,6 +199,9 @@ const settingsSchema = new Schema<SettingsDocument>(
           maxPerRun: { type: Number, default: 100 },
         },
       },
+    },
+    pitch: {
+      reuseAcrossSimilarLeads: { type: Boolean, default: true },
     },
     onboardedAt: { type: Date, default: null },
   },
