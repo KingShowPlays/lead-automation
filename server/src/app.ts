@@ -8,6 +8,7 @@ import { pipelineRouter } from "./routes/pipeline.js";
 import { suppressionRouter } from "./routes/suppression.js";
 import { settingsRouter } from "./routes/settings.js";
 import { statsRouter } from "./routes/stats.js";
+import { themeRouter } from "./routes/theme.js";
 
 /** Builds the Express app (separated from index.ts so tests can import it). */
 export function createApp(): Express {
@@ -46,6 +47,7 @@ export function createApp(): Express {
   app.use("/api/suppression", suppressionRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/stats", statsRouter);
+  app.use("/api/theme", themeRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorHandler);

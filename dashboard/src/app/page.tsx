@@ -20,9 +20,35 @@ import {
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import { useLiveData } from "@/lib/live";
+import { useTheme } from "@/lib/theme/provider";
+import { Counter, Reveal, Stagger, StaggerItem } from "@/lib/theme/motion";
+import { SECTION_ITEMS } from "@/lib/theme/tokens";
 import type { OutreachLogEntry, PipelineJob, PipelineOperationalStatus, Stats } from "@/lib/types";
 
+/**
+ * Column spans as literal class names, because Tailwind reads the source rather
+ * than the running program: a template string like `xl:col-span-${n}` produces
+ * no CSS at all.
+ */
+const SPAN_CLASS: Record<number, string> = {
+  4: "xl:col-span-4",
+  5: "xl:col-span-5",
+  7: "xl:col-span-7",
+  12: "xl:col-span-12",
+};
+
+const SECTION_SPAN: Record<string, number> = Object.fromEntries(SECTION_ITEMS.map((s) => [s.id, s.span]));
+
+/** Same reason as the spans: the tone has to resolve to a class Tailwind saw. */
+const TONE_FILL: Record<string, string> = {
+  brand: "bg-brand-600",
+  cta: "bg-cta-600",
+  rose: "bg-rose-600",
+  emerald: "bg-emerald-600",
+};
+
 export default function OverviewPage() {
+  const { theme } = useTheme();
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [operations, setOperations] = useState<PipelineOperationalStatus | null>(null);
@@ -199,6 +225,243 @@ export default function OverviewPage() {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 6);
 
+  /**
+   * Every headline figure, keyed by the id the theme orders them with. Adding
+   * one here and to METRIC_ITEMS is all it takes for it to become arrangeable.
+   */
+  const metrics: Record<string, React.ReactNode> = {
+    pending: (
+      <MetricCard
+        icon={<RiInboxArchiveLine />}
+        label="Awaiting approval"
+        value={stats.totals.pendingApproval}
+        context={`${insights.approvalShare}% of all tracked leads`}
+        href="/queue"
+        accent="accent-brand"
+        iconClass="text-brand-600"
+      />
+    ),
+    contacted: (
+      <MetricCard
+        icon={<RiMailSendLine />}
+        label="Contacted"
+        value={stats.totals.contacted}
+        context={`${insights.interestRate}% became interested`}
+        href="/leads?outreachStatus=CONTACTED"
+        accent="accent-purple"
+        iconClass="text-purple-600"
+      />
+    ),
+    interested: (
+      <MetricCard
+        icon={<RiEmotionHappyLine />}
+        label="Interested"
+        value={stats.totals.interested}
+        context={`${insights.closeRate}% converted to wins`}
+        href="/leads?outreachStatus=INTERESTED"
+        accent="accent-emerald"
+        iconClass="text-emerald-600"
+      />
+    ),
+    revenue: (
+      <MetricCard
+        icon={<RiTrophyLine />}
+        label="Revenue won"
+        value={stats.revenue.totalDealValue}
+        prefix="₦"
+        context={
+          stats.revenue.convertedDeals > 0
+            ? `₦${insights.averageDeal.toLocaleString()} average deal`
+            : "No converted deals recorded yet"
+        }
+        accent="accent-cta"
+        iconClass="text-cta-500"
+      />
+    ),
+  };
+
+  const visibleMetrics = theme.layout.metricOrder.filter(
+    (id) => !theme.layout.metricHidden.includes(id) && metrics[id],
+  );
+
+  const sections: Record<string, React.ReactNode> = {
+    metrics: visibleMetrics.length > 0 && (
+      <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {visibleMetrics.map((id) => (
+          <StaggerItem key={id} className="min-w-0">
+            {metrics[id]}
+          </StaggerItem>
+        ))}
+      </Stagger>
+    ),
+
+    funnel: (
+      <div className="panel accent-brand border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Pipeline funnel</h2>
+            <p className="section-description">Current volume and drop-off at each commercial stage.</p>
+          </div>
+          <span className="status-badge text-brand-600">{stats.totals.converted} wins</span>
+        </div>
+        <div className="space-y-4">
+          {funnel.map(([label, value, href], index) => {
+            const previous = index === 0 ? value : funnel[index - 1][1];
+            const conversion = index === 0 || previous === 0 ? 100 : Math.round((value / previous) * 100);
+            return (
+              <Link key={label} href={href} className="group block">
+                <div className="flex items-end justify-between gap-4 text-sm">
+                  <div>
+                    <span className="font-semibold text-slate-700 group-hover:text-brand-600 dark:text-slate-200">{label}</span>
+                    {index > 0 && <span className="ml-2 text-xs text-slate-400">{conversion}% from prior stage</span>}
+                  </div>
+                  <span className="font-heading font-extrabold tabular-nums">{value.toLocaleString()}</span>
+                </div>
+                <div className="mt-2 h-3 border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                  <div
+                    className="h-full bg-brand-600 transition-[width] duration-500 ease-theme"
+                    style={{ width: `${Math.max((value / funnelMax) * 100, value > 0 ? 2 : 0)}%` }}
+                  />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    ),
+
+    attention: (
+      <div className="panel accent-cta border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Needs attention</h2>
+            <p className="section-description">Operational blockers and the most valuable next actions.</p>
+          </div>
+          <RiErrorWarningLine className="h-5 w-5 text-cta-500" />
+        </div>
+        {attention.length === 0 ? (
+          <div className="border border-emerald-500/40 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-400">
+            <p className="font-bold">Operations are healthy</p>
+            <p className="mt-1 text-xs opacity-80">Providers are configured and the approval queue is clear.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {attention.map((item) => (
+              <Link key={item.title} href={item.href} className="flex items-start gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <span className={`mt-1 h-2 w-2 shrink-0 ${TONE_FILL[item.tone] ?? "bg-brand-600"}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">{item.title}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{item.detail}</span>
+                </span>
+                <RiArrowRightLine className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    ),
+
+    discovery: (
+      <div className="panel accent-purple border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Discovery pulse</h2>
+            <p className="section-description">New leads created in the most recent runs.</p>
+          </div>
+          <RiRadarLine className="h-5 w-5 text-purple-600" />
+        </div>
+        <RunBars runs={stats.recentRuns} />
+        <div className="mt-5 divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+          {stats.recentRuns.slice(0, 4).map((run) => (
+            <div key={run._id} className="flex items-center justify-between gap-3 py-3 text-xs">
+              <span className="text-slate-500 dark:text-slate-400">
+                {new Date(run.startedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
+              </span>
+              <span className="font-bold tabular-nums">+{run.totals.created} new</span>
+            </div>
+          ))}
+          {stats.recentRuns.length === 0 && <p className="py-6 text-center text-sm text-slate-400">No discovery runs yet.</p>}
+        </div>
+      </div>
+    ),
+
+    "website-mix": (
+      <div className="panel accent-slate border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Website opportunity mix</h2>
+            <p className="section-description">The strongest website sales angles in the database.</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {websiteMix.map(([type, count]) => (
+            <Link
+              key={type}
+              href={`/leads?websiteType=${type}`}
+              className="flex items-center gap-3 border-b border-slate-200 pb-3 text-sm last:border-0 last:pb-0 dark:border-slate-800"
+            >
+              <span className="min-w-0 flex-1 capitalize text-slate-600 hover:text-brand-600 dark:text-slate-300">
+                {type.replaceAll("_", " ").toLowerCase()}
+              </span>
+              <span className="font-heading font-extrabold tabular-nums">{count}</span>
+              <span className="w-16 text-right text-xs text-slate-400">
+                {Math.round((count / Math.max(stats.totals.total, 1)) * 100)}%
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    ),
+
+    integrations: (
+      <div className="panel accent-emerald border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Integration health</h2>
+            <p className="section-description">Provider readiness for the complete automation loop.</p>
+          </div>
+        </div>
+        <div className="divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+          <IntegrationRow ok={stats.integrations.googlePlaces} label="Google Places discovery" />
+          <IntegrationRow ok={stats.integrations.ai} label={`AI writer · ${stats.integrations.aiProvider || "none"}`} />
+          <IntegrationRow ok={stats.integrations.email} label={`Email · ${stats.integrations.emailProvider || "none"}`} />
+          <IntegrationRow ok={stats.integrations.authEnabled} label="API authentication" />
+        </div>
+        <Link href="/settings" className="btn-ghost mt-4 w-full">
+          Configure integrations <RiArrowRightLine className="h-4 w-4" />
+        </Link>
+      </div>
+    ),
+
+    activity: (
+      <div className="panel accent-brand border-t-4">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title">Recent outreach activity</h2>
+            <p className="section-description">The latest approval, delivery, response, and conversion events.</p>
+          </div>
+          <RiTimeLine className="h-5 w-5 text-brand-600" />
+        </div>
+        {stats.recentActivity.length === 0 ? (
+          <div className="empty-state min-h-48">
+            <p className="text-sm font-bold">No outreach activity yet</p>
+            <p className="mt-1 text-xs text-slate-400">Approve or contact a lead to begin the activity timeline.</p>
+          </div>
+        ) : (
+          <div className="timeline grid gap-x-8 md:grid-cols-2">
+            {stats.recentActivity.slice(0, 10).map((activity) => (
+              <ActivityItem key={activity._id} activity={activity} />
+            ))}
+          </div>
+        )}
+      </div>
+    ),
+  };
+
+  const visibleSections = theme.layout.sectionOrder.filter(
+    (id) => !theme.layout.sectionHidden.includes(id) && sections[id],
+  );
+
   return (
     <div className="page-shell">
       <header className="page-header">
@@ -249,194 +512,13 @@ export default function OverviewPage() {
 
       {operations?.activeJob && <PipelineProgress job={operations.activeJob} />}
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon={<RiInboxArchiveLine />}
-          label="Awaiting approval"
-          value={stats.totals.pendingApproval.toLocaleString()}
-          context={`${insights.approvalShare}% of all tracked leads`}
-          href="/queue"
-          accent="accent-brand"
-          iconClass="text-brand-600"
-        />
-        <MetricCard
-          icon={<RiMailSendLine />}
-          label="Contacted"
-          value={stats.totals.contacted.toLocaleString()}
-          context={`${insights.interestRate}% became interested`}
-          href="/leads?outreachStatus=CONTACTED"
-          accent="accent-purple"
-          iconClass="text-purple-600"
-        />
-        <MetricCard
-          icon={<RiEmotionHappyLine />}
-          label="Interested"
-          value={stats.totals.interested.toLocaleString()}
-          context={`${insights.closeRate}% converted to wins`}
-          href="/leads?outreachStatus=INTERESTED"
-          accent="accent-emerald"
-          iconClass="text-emerald-600"
-        />
-        <MetricCard
-          icon={<RiTrophyLine />}
-          label="Revenue won"
-          value={`₦${stats.revenue.totalDealValue.toLocaleString()}`}
-          context={
-            stats.revenue.convertedDeals > 0
-              ? `₦${insights.averageDeal.toLocaleString()} average deal`
-              : "No converted deals recorded yet"
-          }
-          accent="accent-cta"
-          iconClass="text-cta-500"
-        />
-      </section>
-
-      <section className="mt-6 grid items-start gap-6 xl:grid-cols-12">
-        <div className="panel accent-brand border-t-4 xl:col-span-7">
-          <div className="section-heading">
-            <div>
-              <h2 className="section-title">Pipeline funnel</h2>
-              <p className="section-description">Current volume and drop-off at each commercial stage.</p>
-            </div>
-            <span className="status-badge text-brand-600">{stats.totals.converted} wins</span>
-          </div>
-          <div className="space-y-4">
-            {funnel.map(([label, value, href], index) => {
-              const previous = index === 0 ? value : funnel[index - 1][1];
-              const conversion = index === 0 || previous === 0 ? 100 : Math.round((value / previous) * 100);
-              return (
-                <Link key={label} href={href} className="group block">
-                  <div className="flex items-end justify-between gap-4 text-sm">
-                    <div>
-                      <span className="font-semibold text-slate-700 group-hover:text-brand-600 dark:text-slate-200">{label}</span>
-                      {index > 0 && <span className="ml-2 text-xs text-slate-400">{conversion}% from prior stage</span>}
-                    </div>
-                    <span className="font-heading font-extrabold tabular-nums">{value.toLocaleString()}</span>
-                  </div>
-                  <div className="mt-2 h-3 border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-                    <div className="h-full bg-brand-600" style={{ width: `${Math.max((value / funnelMax) * 100, value > 0 ? 2 : 0)}%` }} />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="panel accent-cta border-t-4 xl:col-span-5">
-          <div className="section-heading">
-            <div>
-              <h2 className="section-title">Needs attention</h2>
-              <p className="section-description">Operational blockers and the most valuable next actions.</p>
-            </div>
-            <RiErrorWarningLine className="h-5 w-5 text-cta-500" />
-          </div>
-          {attention.length === 0 ? (
-            <div className="border border-emerald-500/40 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-400">
-              <p className="font-bold">Operations are healthy</p>
-              <p className="mt-1 text-xs opacity-80">Providers are configured and the approval queue is clear.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-              {attention.map((item) => (
-                <Link key={item.title} href={item.href} className="flex items-start gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                  <span className={`mt-1 h-2 w-2 shrink-0 bg-${item.tone}-600`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold">{item.title}</span>
-                    <span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{item.detail}</span>
-                  </span>
-                  <RiArrowRightLine className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="mt-6 grid items-start gap-6 xl:grid-cols-12">
-        <div className="panel accent-purple border-t-4 xl:col-span-4">
-          <div className="section-heading">
-            <div>
-              <h2 className="section-title">Discovery pulse</h2>
-              <p className="section-description">New leads created in the most recent runs.</p>
-            </div>
-            <RiRadarLine className="h-5 w-5 text-purple-600" />
-          </div>
-          <RunBars runs={stats.recentRuns} />
-          <div className="mt-5 divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-            {stats.recentRuns.slice(0, 4).map((run) => (
-              <div key={run._id} className="flex items-center justify-between gap-3 py-3 text-xs">
-                <span className="text-slate-500 dark:text-slate-400">
-                  {new Date(run.startedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
-                </span>
-                <span className="font-bold tabular-nums">+{run.totals.created} new</span>
-              </div>
-            ))}
-            {stats.recentRuns.length === 0 && <p className="py-6 text-center text-sm text-slate-400">No discovery runs yet.</p>}
-          </div>
-        </div>
-
-        <div className="panel accent-slate border-t-4 xl:col-span-4">
-          <div className="section-heading">
-            <div>
-              <h2 className="section-title">Website opportunity mix</h2>
-              <p className="section-description">The strongest website sales angles in the database.</p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {websiteMix.map(([type, count]) => (
-              <Link key={type} href={`/leads?websiteType=${type}`} className="flex items-center gap-3 border-b border-slate-200 pb-3 text-sm last:border-0 last:pb-0 dark:border-slate-800">
-                <span className="min-w-0 flex-1 capitalize text-slate-600 hover:text-brand-600 dark:text-slate-300">
-                  {type.replaceAll("_", " ").toLowerCase()}
-                </span>
-                <span className="font-heading font-extrabold tabular-nums">{count}</span>
-                <span className="w-16 text-right text-xs text-slate-400">
-                  {Math.round((count / Math.max(stats.totals.total, 1)) * 100)}%
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel accent-emerald border-t-4 xl:col-span-4">
-          <div className="section-heading">
-            <div>
-              <h2 className="section-title">Integration health</h2>
-              <p className="section-description">Provider readiness for the complete automation loop.</p>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-            <IntegrationRow ok={stats.integrations.googlePlaces} label="Google Places discovery" />
-            <IntegrationRow ok={stats.integrations.ai} label={`AI writer · ${stats.integrations.aiProvider || "none"}`} />
-            <IntegrationRow ok={stats.integrations.email} label={`Email · ${stats.integrations.emailProvider || "none"}`} />
-            <IntegrationRow ok={stats.integrations.authEnabled} label="API authentication" />
-          </div>
-          <Link href="/settings" className="btn-ghost mt-4 w-full">
-            Configure integrations <RiArrowRightLine className="h-4 w-4" />
-          </Link>
-        </div>
-      </section>
-
-      <section className="panel accent-brand mt-6 border-t-4">
-        <div className="section-heading">
-          <div>
-            <h2 className="section-title">Recent outreach activity</h2>
-            <p className="section-description">The latest approval, delivery, response, and conversion events.</p>
-          </div>
-          <RiTimeLine className="h-5 w-5 text-brand-600" />
-        </div>
-        {stats.recentActivity.length === 0 ? (
-          <div className="empty-state min-h-48">
-            <p className="text-sm font-bold">No outreach activity yet</p>
-            <p className="mt-1 text-xs text-slate-400">Approve or contact a lead to begin the activity timeline.</p>
-          </div>
-        ) : (
-          <div className="timeline grid gap-x-8 md:grid-cols-2">
-            {stats.recentActivity.slice(0, 10).map((activity) => (
-              <ActivityItem key={activity._id} activity={activity} />
-            ))}
-          </div>
-        )}
-      </section>
+      <div className="mt-8 grid items-start gap-6 xl:grid-cols-12">
+        {visibleSections.map((id) => (
+          <Reveal key={id} className={`min-w-0 ${SPAN_CLASS[SECTION_SPAN[id] ?? 12] ?? "xl:col-span-12"}`}>
+            {sections[id]}
+          </Reveal>
+        ))}
+      </div>
     </div>
   );
 }
@@ -506,6 +588,7 @@ function MetricCard({
   icon,
   label,
   value,
+  prefix,
   context,
   href,
   accent,
@@ -513,7 +596,8 @@ function MetricCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: number;
+  prefix?: string;
   context: string;
   href?: string;
   accent: string;
@@ -522,7 +606,9 @@ function MetricCard({
   const content = (
     <div className={`metric-card ${accent} h-full ${href ? "hover:bg-slate-50 dark:hover:bg-slate-800/60" : ""}`}>
       <span className={`metric-icon ${iconClass}`}>{icon}</span>
-      <p className="metric-value">{value}</p>
+      <p className="metric-value">
+        <Counter value={value} prefix={prefix} />
+      </p>
       <p className="metric-label">{label}</p>
       <p className="metric-context">{context}</p>
     </div>

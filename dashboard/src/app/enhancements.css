@@ -1,52 +1,14 @@
-/* Route-specific polish layered over the shared flat design system. */
-
-/* Explicit semantic utility coverage for runtime-selected dashboard accents. */
-.bg-brand-600 {
-  background-color: #2563eb;
-}
-
-.bg-cta-600 {
-  background-color: #ea580c;
-}
-
-.bg-rose-600 {
-  background-color: #e11d48;
-}
-
 /*
- * Symmetry pass
+ * Route-specific polish, layered over the token driven system in globals.css.
  *
- * Page headers and filter toolbars used to compete as sticky layers. Keeping
- * them in normal document flow prevents them from covering the first panel or
- * each other, while retaining the fixed mobile application navigation.
+ * Nothing here may hardcode a colour, a corner or a size. Everything reads the
+ * same custom properties the theme writes, so a rule that fixes a queue card on
+ * a phone keeps working after the palette, radius or density changes.
  */
-.page-header {
-  position: relative !important;
-  top: auto !important;
-  z-index: auto !important;
-  align-items: center !important;
-  margin: -1rem calc(var(--gutter, 2rem) * -1) 0 !important;
-  padding: 0.75rem var(--gutter, 2rem) 1rem !important;
-}
 
-.toolbar {
-  position: relative !important;
-  top: auto !important;
-  z-index: auto !important;
-}
-
-.section-heading {
-  align-items: center !important;
-}
-
-.page-actions,
-.section-heading > :last-child {
-  align-self: center;
-}
-
-/* Buttons, inputs, segmented controls and status badges share one 44px rhythm. */
+/* One control rhythm: buttons, badges and segmented controls share a height. */
 .status-badge {
-  min-height: 2.75rem !important;
+  min-height: var(--control-height) !important;
   height: auto;
   max-width: 100%;
   justify-content: center;
@@ -58,42 +20,48 @@
 
 .segmented-control,
 .segmented-control button {
-  min-height: 2.75rem !important;
-  height: 2.75rem;
+  min-height: var(--control-height) !important;
 }
 
 .page-actions > button,
 .page-actions > a,
 .page-actions > .btn {
-  min-height: 2.75rem !important;
-  height: 2.75rem;
+  min-height: var(--control-height) !important;
 }
 
 .section-heading > .status-badge {
-  min-height: 2.75rem !important;
+  min-height: var(--control-height) !important;
   height: auto;
 }
 
+.page-actions,
+.section-heading > :last-child {
+  align-self: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings                                                            */
+/* ------------------------------------------------------------------ */
+
 html[data-route="settings"] .app-main > div {
-  max-width: none !important;
   padding-bottom: 7rem;
 }
 
 html[data-route="settings"] .app-main > div > header {
-  position: relative;
-  top: auto;
-  z-index: auto;
-  align-items: center !important;
-  margin: -1rem calc(var(--gutter, 2rem) * -1) 0;
-  padding: 0.75rem var(--gutter, 2rem) 1rem;
-  border-bottom: 1px solid rgb(var(--line));
-  background: rgb(var(--page-bg));
+  display: flex;
+  align-items: center;
+  margin: calc(var(--gutter-sm) * -1) calc(var(--gutter-x) * -1) 0;
+  padding: var(--gutter-sm) var(--gutter-x);
+  border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
+  background: rgb(var(--canvas));
 }
 
 html[data-route="settings"] .app-main > div > header h1 {
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-family: var(--font-heading);
+  font-size: calc(clamp(1.6rem, 3vw, 2.4rem) * var(--display-scale));
+  font-weight: var(--heading-weight);
   line-height: 1.05;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--heading-tracking);
 }
 
 html[data-route="settings"] .app-main section {
@@ -101,13 +69,13 @@ html[data-route="settings"] .app-main section {
 }
 
 html[data-route="settings"] .app-main section.glass-card {
-  border-top: 4px solid #2563eb;
+  border-top: var(--accent-bar) var(--border-style) rgb(var(--accent));
   background: rgb(var(--surface));
 }
 
 html[data-route="settings"] .app-main section.glass-card > h2,
 html[data-route="settings"] .app-main section.glass-card > :first-child h2 {
-  letter-spacing: -0.02em;
+  letter-spacing: var(--heading-tracking);
 }
 
 html[data-route="settings"] .app-main section.glass-card .grid > div[class*="border"] {
@@ -115,45 +83,38 @@ html[data-route="settings"] .app-main section.glass-card .grid > div[class*="bor
 }
 
 html[data-route="settings"] .app-main section.glass-card .grid > div[class*="border-brand"] {
-  border-left: 4px solid #2563eb;
-  background: rgb(37 99 235 / 0.04);
+  border-left: var(--accent-bar) var(--border-style) rgb(var(--accent));
+  background: rgb(var(--accent) / 0.05);
 }
 
 html[data-route="settings"] .app-main label[class*="justify-between"] {
-  border-color: rgb(var(--line));
+  border-color: rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
 }
 
 html[data-route="settings"] .app-main label[class*="justify-between"]:hover {
-  background: rgb(37 99 235 / 0.04);
+  background: rgb(var(--accent) / 0.05);
 }
 
 html[data-route="settings"] .app-main .fixed.inset-x-0.bottom-0 {
-  border-color: rgb(var(--line));
+  border-color: rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
 }
 
-@media (min-width: 1024px) {
-  .app-main {
-    padding-top: 1rem !important;
-  }
-}
+/* ------------------------------------------------------------------ */
+/* Narrow screens                                                      */
+/* ------------------------------------------------------------------ */
 
 @media (max-width: 767px) {
-  .page-header,
   html[data-route="settings"] .app-main > div > header {
-    align-items: flex-start !important;
+    align-items: flex-start;
     flex-direction: column;
-    margin: -1rem calc(var(--gutter, 1rem) * -1) 0 !important;
-    padding: 0.75rem var(--gutter, 1rem) 1rem !important;
   }
 
-  .page-header .page-actions,
   html[data-route="settings"] .app-main > div > header > div:last-child {
     width: 100%;
   }
 
-  .page-header .page-actions > *,
   html[data-route="settings"] .app-main > div > header > div:last-child > button {
     flex: 1 1 auto;
   }

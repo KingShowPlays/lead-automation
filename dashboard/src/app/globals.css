@@ -2,24 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ---------------------------------------------------------------------------
+ * Fallback tokens
+ * ---------------------------------------------------------------------------
+ * The real values are written into the document head by the theme, at a higher
+ * specificity (`html:root`) so they always win regardless of stylesheet order.
+ * What is here is the floor: enough for the interface to be readable if that
+ * stylesheet were ever missing. It is not a second source of truth, and nothing
+ * should be added to it that the theme does not also set.
+ */
 :root {
   color-scheme: light dark;
-  --page-bg: 248 250 252;
+
+  --canvas: 255 255 255;
+  --page-bg: 255 255 255;
   --surface: 255 255 255;
-  --surface-muted: 241 245 249;
-  --line: 203 213 225;
-  --text: 15 23 42;
-  --muted: 100 116 139;
+  --surface-muted: 244 244 244;
+  --line: 216 216 216;
+  --ink: 10 10 10;
+  --text: 10 10 10;
+  --muted: 92 92 92;
+  --ink-muted: 92 92 92;
+  --accent: 23 163 74;
+  --accent-ink: 255 255 255;
+  --shadow-rgb: 10 10 10;
+
+  --n-0: 255 255 255;
+  --n-1000: 0 0 0;
+
+  --radius-base: 0px;
+  --radius-inner: 0px;
+  --radius-card: 0px;
+  --radius-control: 0px;
+  --radius-input: 0px;
+  --radius-badge: 0px;
+  --radius-pill: 999px;
+
+  --border-width: 1px;
+  --border-strong: 2px;
+  --border-style: solid;
+  --accent-bar: 4px;
+  --focus-width: 2px;
+  --line-alpha: 1;
+
+  --density: 1;
+  --gutter: 32px;
+  --gutter-sm: 16px;
+  --gutter-md: 24px;
+  --card-padding: 24px;
+  --control-height: 44px;
+  --row-height: 52px;
+  --metric-height: 152px;
+  --sidebar-width: 256px;
+  --content-max: none;
+
+  --font-heading: ui-sans-serif, system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --type-scale: 1;
+  --heading-weight: 800;
+  --heading-tracking: -0.035em;
+  --body-leading: 1.6;
+  --label-transform: uppercase;
+  --label-tracking: 0.09em;
+  --display-scale: 1;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-scale: 1;
+  --duration-fast: 140ms;
+  --duration: 320ms;
+  --duration-slow: 680ms;
+  --lift: -3px;
+  --reveal-distance: 24px;
+  --marquee-duration: 34s;
+
+  --shadow: none;
+  --glow: none;
 }
 
-html.dark {
-  --page-bg: 2 6 23;
-  --surface: 15 23 42;
-  --surface-muted: 30 41 59;
-  --line: 51 65 85;
-  --text: 241 245 249;
-  --muted: 148 163 184;
-}
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
 
 html,
 body {
@@ -30,37 +94,36 @@ body {
 }
 
 html {
-  background: rgb(var(--page-bg));
+  /* The type scale is the one control that resizes the whole interface: every
+     rem based spacing utility follows it, so this is component sizing too. */
+  font-size: calc(16px * var(--type-scale));
+  background: rgb(var(--canvas));
 }
 
 body {
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
-  background: rgb(var(--page-bg));
-  color: rgb(var(--text));
-  @apply font-body antialiased;
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
+  font-family: var(--font-body);
+  line-height: var(--body-leading);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-  border-radius: 0 !important;
-}
-
-body * {
-  box-shadow: none !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
 }
 
 ::selection {
-  background: rgb(37 99 235 / 0.2);
+  background: rgb(var(--accent) / 0.22);
 }
 
 :focus-visible {
-  outline: 2px solid #2563eb;
+  outline: var(--focus-width) solid rgb(var(--accent));
   outline-offset: 2px;
 }
 
@@ -76,29 +139,87 @@ input,
 textarea,
 select {
   font: inherit;
+  font-family: var(--font-body);
 }
 
+/* 16px is the threshold below which iOS zooms the page on focus. It is a
+   platform constraint, not a style choice, so the type scale does not touch it. */
 input,
 textarea,
 select {
   font-size: 16px !important;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+.font-heading {
+  font-family: var(--font-heading);
+  letter-spacing: var(--heading-tracking);
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------------ */
+/* Corners                                                             */
+/* ------------------------------------------------------------------ */
+/*
+ * One master value, then category overrides, in order of increasing
+ * specificity so the more specific rule always lands. The universal rule is
+ * !important on purpose: the point of this control is that the theme decides
+ * the geometry, not whichever utility class happened to be typed years ago.
+ * Pills come last so a `rounded-full` avatar stays round whatever else is set.
+ */
+*,
+*::before,
+*::after {
+  border-radius: var(--radius-base) !important;
+}
+
+.panel,
+.metric-card,
+.glass-card,
+.table-shell,
+.empty-state,
+.queue-card,
+.control-card,
+[data-radius="card"] {
+  border-radius: var(--radius-card) !important;
+}
+
+.btn,
 button,
-a,
+.segmented-control,
+[data-radius="control"] {
+  border-radius: var(--radius-control) !important;
+}
+
+.input,
 input,
+select,
 textarea,
-select {
-  transition-property: color, background-color, border-color, opacity;
-  transition-duration: 150ms;
+[data-radius="input"] {
+  border-radius: var(--radius-input) !important;
 }
 
-button:active,
-a:active {
-  transform: none !important;
+.status-badge,
+[data-radius="badge"] {
+  border-radius: var(--radius-badge) !important;
 }
 
-/* Spinner is the deliberate exception to the square geometry rule. */
+.rounded-full,
+[data-radius="pill"] {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* A spinner reads as broken at any corner but a full one. It is an indicator,
+   not decoration, so it opts out of the geometry entirely. */
 .loader-spinner,
 .animate-spin {
   border-radius: 9999px !important;
@@ -114,98 +235,317 @@ a:active {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Motion                                                              */
+/* ------------------------------------------------------------------ */
+
+button,
+a,
+input,
+textarea,
+select,
+.metric-card,
+.panel,
+.queue-card {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease);
+}
+
+html[data-motion-hover="on"] .metric-card:hover,
+html[data-motion-hover="on"] .queue-card:hover,
+html[data-motion-hover="on"] .lift:hover {
+  transform: translateY(var(--lift));
+}
+
+html[data-motion-hover="on"] .btn:hover:not(:disabled) {
+  transform: translateY(calc(var(--lift) * 0.5));
+}
+
+html[data-motion-hover="on"] .btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Underline that wipes in, used on inline links and navigation. */
+.link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size var(--duration) var(--ease);
+}
+
+html[data-motion-underline="on"] .link-underline:hover,
+html[data-motion-underline="on"] .link-underline:focus-visible {
+  background-size: 100% 1px;
+}
+
+html[data-motion-pulse="off"] .animate-pulse {
+  animation: none !important;
+}
+
+/*
+ * With motion off, anything still carrying an inline transform or a faded
+ * opacity from an interrupted animation is put back where it belongs. This is
+ * scoped to the shell so it can never freeze the theme editor's own previews.
+ */
+html[data-motion="off"] .app-shell [style*="transform"]:not(.animate-spin) {
+  transform: none !important;
+}
+
+html[data-motion="off"] .app-shell [style*="opacity"] {
+  opacity: 1 !important;
+}
+
+/*
+ * Spinners are exempt throughout. They report that work is happening, and a
+ * frozen one says the opposite: the interface reads as hung rather than calm.
+ * Under reduced motion they slow down instead of stopping.
+ */
+html[data-motion="off"] .app-shell *:not(.animate-spin):not(.loader-spinner),
+html[data-motion="off"] .app-shell *::before,
+html[data-motion="off"] .app-shell *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin):not(.loader-spinner),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin,
+  .loader-spinner {
+    animation-duration: 1.8s !important;
+  }
+
+  .marquee-track {
+    animation: none !important;
+  }
+}
+
+/* Lenis drives scrolling when momentum is on; native smooth would fight it. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+html.lenis {
+  scroll-behavior: auto;
+}
+
+.marquee {
+  overflow: hidden;
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee var(--marquee-duration) linear infinite;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+.marquee-part {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Effects                                                             */
+/* ------------------------------------------------------------------ */
+
+html[data-shadow="0"] .app-shell [class*="shadow-"] {
+  box-shadow: none !important;
+}
+
+html[data-glass="off"] .app-shell * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html[data-glass="on"] .panel,
+html[data-glass="on"] .metric-card,
+html[data-glass="on"] .toolbar {
+  background: rgb(var(--surface) / 0.72);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+html[data-glow="on"] .btn-primary,
+html[data-glow="on"] .segmented-control button[aria-pressed="true"] {
+  box-shadow: var(--glow);
+}
+
+/*
+ * Legacy gradient utilities. With gradients off they collapse to the flat
+ * colour they were standing in for, which keeps their meaning while losing the
+ * decoration. The tint each maps to now comes from the palette, so a gradient
+ * left in old markup still re-tints with everything else.
+ */
+html[data-gradients="off"] [class*="bg-gradient-to-"] {
+  background-image: none !important;
+  background-color: rgb(var(--accent)) !important;
+}
+
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="from-purple-"] {
+  background-color: rgb(var(--purple-600)) !important;
+}
+
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="from-emerald-"] {
+  background-color: rgb(var(--emerald-600)) !important;
+}
+
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="from-cta-"] {
+  background-color: rgb(var(--cta-500)) !important;
+}
+
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="from-rose-"] {
+  background-color: rgb(var(--rose-600)) !important;
+}
+
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="/8"],
+html[data-gradients="off"] [class*="bg-gradient-to-"][class*="/10"] {
+  background-color: rgb(var(--surface-muted)) !important;
+}
+
+html[data-gradients="off"] .bg-clip-text.text-transparent {
+  background-color: transparent !important;
+  color: rgb(var(--accent)) !important;
+}
+
+/* Structural grid, drawn behind the page rather than as an element, so it can
+   never take part in layout or push anything sideways. */
+html[data-grid="on"] .app-shell {
+  background-image:
+    linear-gradient(to right, rgb(var(--line) / 0.55) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(var(--line) / 0.55) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+/*
+ * Full-screen overlays. Fixed and pointer-transparent, above the interface but
+ * under notifications. Being fixed is what keeps them out of the document's
+ * scroll width: a texture must never be the reason a page scrolls sideways.
+ */
+body::before,
+body::after {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  content: "";
+}
+
+html[data-noise="on"] body::before {
+  display: block;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+}
+
+html[data-scanlines="on"] body::after {
+  display: block;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgb(var(--ink) / 0.055) 0px,
+    rgb(var(--ink) / 0.055) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+html[data-vignette="on"] .app-shell::after {
+  position: fixed;
+  z-index: 54;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgb(var(--n-1000) / 0.35) 100%);
+  content: "";
+}
+
+/* ------------------------------------------------------------------ */
+/* Shell                                                               */
+/* ------------------------------------------------------------------ */
+
 .app-shell {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  background: rgb(var(--page-bg));
+  background: rgb(var(--canvas));
+}
+
+html[data-sidebar="right"] .app-shell {
+  flex-direction: row-reverse;
 }
 
 .app-main {
   /*
-   * The page gutter, matching the px-4 / sm:px-6 / lg:px-8 utilities on this
-   * element. The full-bleed page header pulls its negative margin from this, so
-   * the two can never disagree. They used to: the header hardcoded -2rem while
-   * the gutter was 1.5rem at tablet widths, making the header 16px wider than
-   * the screen on every page.
+   * One gutter value, used by the page padding and by the negative margin the
+   * full bleed header pulls itself out by. They were separate once, disagreed,
+   * and made the header wider than the screen on every page.
    */
-  --gutter: 1rem;
+  --gutter-x: var(--gutter);
   width: 100%;
   min-width: 0;
-  max-width: none;
   min-height: 100vh;
   min-height: 100dvh;
+  padding-inline: var(--gutter-x);
 }
 
-@media (min-width: 640px) {
+@media (max-width: 767px) {
   .app-main {
-    --gutter: 1.5rem;
+    --gutter-x: min(var(--gutter), 16px);
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) and (max-width: 1023px) {
   .app-main {
-    --gutter: 2rem;
+    --gutter-x: min(var(--gutter), 24px);
   }
 }
 
 .app-main > * {
   width: 100%;
-  max-width: none !important;
-  margin-inline: 0 !important;
+  min-width: 0;
+  max-width: var(--content-max);
+  margin-inline: auto;
 }
 
-/* Keep the interface steady where older components still use motion libraries. */
-.app-shell [style*="transform"]:not(.animate-spin) {
-  transform: none !important;
+.app-sidebar {
+  width: var(--sidebar-width);
 }
 
-.app-shell [style*="opacity"] {
-  opacity: 1 !important;
-}
+/* ------------------------------------------------------------------ */
+/* Page hierarchy                                                      */
+/* ------------------------------------------------------------------ */
 
-.app-shell .animate-pulse {
-  animation: none !important;
-}
-
-.glass-card {
-  transform: none !important;
-}
-
-/* Flatten legacy gradients without losing their semantic colour. */
-[class*="bg-gradient-to-"] {
-  background-image: none !important;
-  background-color: #2563eb !important;
-}
-
-[class*="bg-gradient-to-"][class*="from-purple-"] {
-  background-color: #7c3aed !important;
-}
-
-[class*="bg-gradient-to-"][class*="from-emerald-"] {
-  background-color: #059669 !important;
-}
-
-[class*="bg-gradient-to-"][class*="from-cta-"] {
-  background-color: #f97316 !important;
-}
-
-[class*="bg-gradient-to-"][class*="from-rose-"] {
-  background-color: #e11d48 !important;
-}
-
-[class*="bg-gradient-to-"][class*="/8"],
-[class*="bg-gradient-to-"][class*="/10"] {
-  background-color: rgb(var(--surface-muted)) !important;
-}
-
-.bg-clip-text.text-transparent {
-  background-color: transparent !important;
-  color: #2563eb !important;
-}
-
-/* Shared page hierarchy */
 .page-shell {
   width: 100%;
   min-width: 0;
@@ -221,34 +561,38 @@ a:active {
 }
 
 .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: calc(var(--gutter-sm) * -1) calc(var(--gutter-x) * -1) 0;
+  padding: var(--gutter-sm) var(--gutter-x) var(--gutter-sm);
+  border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
+  background: rgb(var(--canvas));
+}
+
+html[data-header="sticky"] .page-header {
   position: sticky;
   top: 0;
   z-index: 20;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: -2rem calc(var(--gutter, 2rem) * -1) 0;
-  padding: 1.5rem var(--gutter, 2rem) 1rem;
-  border-bottom: 1px solid rgb(var(--line));
-  background: rgb(var(--page-bg) / 0.97);
+  background: rgb(var(--canvas) / 0.97);
 }
 
 .page-kicker {
   margin-bottom: 0.35rem;
-  color: #2563eb;
+  color: rgb(var(--accent));
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-transform);
 }
 
 .page-title {
-  font-family: var(--font-space-grotesk), sans-serif;
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
-  font-weight: 800;
+  font-family: var(--font-heading);
+  font-size: calc(clamp(1.6rem, 3vw, 2.4rem) * var(--display-scale));
+  font-weight: var(--heading-weight);
   line-height: 1.05;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .page-subtitle {
@@ -256,7 +600,7 @@ a:active {
   margin-top: 0.5rem;
   color: rgb(var(--muted));
   font-size: 0.875rem;
-  line-height: 1.6;
+  line-height: var(--body-leading);
 }
 
 .page-actions {
@@ -269,17 +613,17 @@ a:active {
 
 .section-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
 }
 
 .section-title {
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: var(--font-heading);
   font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
 }
 
 .section-description {
@@ -289,12 +633,16 @@ a:active {
   line-height: 1.5;
 }
 
-/* Flat cards and metric hierarchy */
+/* ------------------------------------------------------------------ */
+/* Cards and metrics                                                   */
+/* ------------------------------------------------------------------ */
+
 .metric-card,
 .panel,
 .glass-card {
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
+  box-shadow: var(--shadow);
 }
 
 .metric-card,
@@ -304,37 +652,39 @@ a:active {
 }
 
 .metric-card {
-  min-height: 9.5rem;
-  padding: 1.25rem;
-  border-top-width: 4px;
+  min-height: var(--metric-height);
+  padding: var(--card-padding);
+  border-top-width: var(--accent-bar);
+  /* Lets the figure inside size against this card rather than the viewport. */
+  container-type: inline-size;
 }
 
 .panel {
-  padding: 1.5rem;
+  padding: var(--card-padding);
 }
 
 .accent-brand {
-  border-top-color: #2563eb !important;
+  border-top-color: rgb(var(--accent)) !important;
 }
 
 .accent-purple {
-  border-top-color: #7c3aed !important;
+  border-top-color: rgb(var(--purple-600)) !important;
 }
 
 .accent-emerald {
-  border-top-color: #059669 !important;
+  border-top-color: rgb(var(--emerald-600)) !important;
 }
 
 .accent-cta {
-  border-top-color: #f97316 !important;
+  border-top-color: rgb(var(--cta-600)) !important;
 }
 
 .accent-rose {
-  border-top-color: #e11d48 !important;
+  border-top-color: rgb(var(--rose-600)) !important;
 }
 
 .accent-slate {
-  border-top-color: #64748b !important;
+  border-top-color: rgb(var(--n-500)) !important;
 }
 
 .metric-icon {
@@ -343,18 +693,38 @@ a:active {
   height: 2.5rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid currentColor;
+  border: var(--border-width) var(--border-style) currentColor;
   font-size: 1.1rem;
 }
 
 .metric-value {
   margin-top: 1.15rem;
-  font-family: var(--font-space-grotesk), sans-serif;
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 800;
+  font-family: var(--font-heading);
+  /*
+   * The 22cqi term is a floor, not the usual size: it only bites when the card
+   * is genuinely cramped, which is how a long naira figure in a narrow column
+   * stops breaking across two lines mid-number.
+   */
+  font-size: calc(min(clamp(1.6rem, 3vw, 2.15rem), 22cqi) * var(--display-scale));
+  font-weight: var(--heading-weight);
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--heading-tracking);
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Currency symbols sit in their own element with the body face and no negative
+ * tracking. The display face carries no naira glyph, so it falls back to one
+ * whose ink overhangs its advance width; at heading sizes the symbol ran into
+ * the first digit and the figure read as a single broken character.
+ */
+.currency-mark {
+  margin-right: 0.1em;
+  font-family: var(--font-body);
+  font-size: 0.86em;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .metric-label {
@@ -362,8 +732,8 @@ a:active {
   color: rgb(var(--muted));
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-transform);
 }
 
 .metric-context {
@@ -372,18 +742,18 @@ a:active {
   font-size: 0.75rem;
 }
 
-/* Toolbars and filters */
+/* ------------------------------------------------------------------ */
+/* Toolbars and controls                                               */
+/* ------------------------------------------------------------------ */
+
 .toolbar {
-  position: sticky;
-  top: 5.6rem;
-  z-index: 15;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding: 0.875rem;
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
 }
 
@@ -391,14 +761,14 @@ a:active {
   display: inline-flex;
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
 }
 
 .segmented-control button {
-  min-height: 2.5rem;
+  min-height: calc(var(--control-height) - 4px);
   padding: 0.5rem 0.85rem;
-  border-right: 1px solid rgb(var(--line));
+  border-right: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   color: rgb(var(--muted));
   font-size: 0.75rem;
   font-weight: 800;
@@ -409,15 +779,18 @@ a:active {
 }
 
 .segmented-control button[aria-pressed="true"] {
-  background: #2563eb;
-  color: white;
+  background: rgb(var(--accent));
+  color: rgb(var(--accent-ink));
 }
 
-/* Data tables */
+/* ------------------------------------------------------------------ */
+/* Tables                                                              */
+/* ------------------------------------------------------------------ */
+
 .table-shell {
   margin-top: 1.5rem;
   overflow: auto;
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
 }
 
@@ -436,19 +809,20 @@ a:active {
 
 .data-table th {
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid rgb(var(--line));
+  border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   color: rgb(var(--muted));
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.09em;
+  letter-spacing: var(--label-tracking);
   text-align: left;
-  text-transform: uppercase;
+  text-transform: var(--label-transform);
   white-space: nowrap;
 }
 
 .data-table td {
+  height: var(--row-height);
   padding: 0.9rem 1rem;
-  border-bottom: 1px solid rgb(var(--line) / 0.65);
+  border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / calc(var(--line-alpha) * 0.65));
   overflow-wrap: anywhere;
   vertical-align: middle;
 }
@@ -459,28 +833,27 @@ a:active {
 
 .data-table tbody tr:hover,
 .data-table tbody tr:focus-within {
-  background: rgb(37 99 235 / 0.07);
+  background: rgb(var(--accent) / 0.07);
 }
 
 .data-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-/* Mobile record alternative to wide tables */
 .mobile-record-list {
   display: none;
   margin-top: 1rem;
-  border-top: 1px solid rgb(var(--line));
+  border-top: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
 }
 
 .mobile-record {
   display: block;
   padding: 1rem 0;
-  border-bottom: 1px solid rgb(var(--line));
+  border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
 }
 
 .mobile-record:active {
-  background: rgb(37 99 235 / 0.05);
+  background: rgb(var(--accent) / 0.05);
 }
 
 .mobile-record-grid {
@@ -496,16 +869,19 @@ a:active {
   color: rgb(var(--muted));
   font-size: 0.625rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-transform);
 }
 
-/* Statuses, timelines, and operational states */
+/* ------------------------------------------------------------------ */
+/* States                                                              */
+/* ------------------------------------------------------------------ */
+
 .status-badge {
   display: inline-flex;
   min-height: 1.75rem;
   align-items: center;
-  border: 1px solid currentColor;
+  border: var(--border-width) var(--border-style) currentColor;
   padding: 0.25rem 0.55rem;
   font-size: 0.6875rem;
   font-weight: 800;
@@ -549,7 +925,7 @@ a:active {
   width: 0.55rem;
   height: 0.55rem;
   border: 2px solid rgb(var(--surface));
-  background: #2563eb;
+  background: rgb(var(--accent));
   content: "";
 }
 
@@ -559,7 +935,7 @@ a:active {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px dashed rgb(var(--line));
+  border: var(--border-width) dashed rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
   padding: 2.5rem 1.5rem;
   text-align: center;
@@ -571,28 +947,147 @@ a:active {
   height: 3.5rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   color: rgb(var(--muted));
   font-size: 1.5rem;
 }
 
 .skeleton-block {
-  border: 1px solid rgb(var(--line));
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface-muted));
 }
 
 .queue-card {
-  border-left-width: 4px !important;
+  border-left-width: var(--accent-bar) !important;
 }
 
+/*
+ * The action bar bleeds to the edges of the region it sits in, so its negative
+ * margin has to be exactly that region's padding. That region is padded by
+ * utility classes rather than by the density token, so this must not read the
+ * token: tying it to card padding made a loose preset pull the bar wider than
+ * the screen.
+ */
 .queue-actions {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  margin: 1rem -1.25rem -1.25rem;
-  padding: 0.85rem 1.25rem;
-  border-top: 1px solid rgb(var(--line));
+  margin: 1rem -1rem -1rem;
+  padding: 0.85rem 1rem;
+  border-top: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
   background: rgb(var(--surface));
+}
+
+@media (min-width: 640px) {
+  .queue-actions {
+    margin: 1rem -1.25rem -1.25rem;
+    padding: 0.85rem 1.25rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Theme control                                                       */
+/* ------------------------------------------------------------------ */
+
+.control-tabs {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  border: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
+  background: rgb(var(--surface));
+}
+
+.control-tab {
+  display: flex;
+  min-height: var(--control-height);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem;
+  border-bottom: var(--border-strong) var(--border-style) transparent;
+  color: rgb(var(--muted));
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.control-tab-active {
+  border-bottom-color: rgb(var(--accent));
+  color: rgb(var(--accent));
+  background: rgb(var(--accent) / 0.08);
+}
+
+@media (min-width: 1280px) {
+  .control-tabs {
+    position: sticky;
+    top: 1rem;
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .control-tab {
+    width: 100%;
+    border-bottom: var(--border-width) var(--border-style) rgb(var(--line) / var(--line-alpha));
+    border-left: var(--accent-bar) var(--border-style) transparent;
+  }
+
+  .control-tab:last-child {
+    border-bottom: 0;
+  }
+
+  .control-tab-active {
+    border-left-color: rgb(var(--accent));
+  }
+}
+
+/* The corner samples show what each surface would look like, so they have to
+   escape the geometry the theme is currently imposing. */
+.corner-sample {
+  border-radius: var(--sample-radius, 0px) !important;
+}
+
+/* Range inputs are the main instrument on this page, so they get drawn
+   properly rather than left to the browser's default. */
+.theme-range {
+  height: 1.75rem;
+  width: 100%;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.theme-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgb(var(--line));
+}
+
+.theme-range::-moz-range-track {
+  height: 4px;
+  background: rgb(var(--line));
+}
+
+.theme-range::-webkit-slider-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: -0.5rem;
+  border: 2px solid rgb(var(--accent));
+  background: rgb(var(--surface));
+  border-radius: var(--radius-pill);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.theme-range::-moz-range-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid rgb(var(--accent));
+  background: rgb(var(--surface));
+  border-radius: var(--radius-pill);
+}
+
+.theme-range:focus-visible {
+  outline: var(--focus-width) solid rgb(var(--accent));
+  outline-offset: 4px;
 }
 
 /* Slim, visible scrollbars for dense operational screens. */
@@ -610,17 +1105,30 @@ a:active {
   background: rgb(var(--line));
 }
 
+/* ------------------------------------------------------------------ */
+/* Components                                                          */
+/* ------------------------------------------------------------------ */
+
 @layer components {
   .glass-card {
-    @apply border border-slate-200 bg-white transition-colors dark:border-slate-800 dark:bg-slate-900;
+    @apply border border-line bg-surface transition-colors;
   }
 
   .btn {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 border border-transparent px-4 py-2.5 text-sm font-semibold transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 border border-transparent px-4 py-2.5 text-sm font-semibold transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: var(--control-height);
   }
 
   .btn-primary {
-    @apply btn border-brand-600 bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn;
+    border-color: rgb(var(--accent));
+    background: rgb(var(--accent));
+    color: rgb(var(--accent-ink));
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: rgb(var(--brand-700));
+    border-color: rgb(var(--brand-700));
   }
 
   .btn-cta {
@@ -636,21 +1144,24 @@ a:active {
   }
 
   .input {
-    @apply w-full min-h-11 border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100;
+    @apply w-full border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100;
+    min-height: var(--control-height);
   }
 
   .label {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+    @apply mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400;
+    letter-spacing: var(--label-tracking);
+    text-transform: var(--label-transform);
   }
 }
 
-@media (max-width: 1023px) {
-  .page-header {
-    top: 4rem;
-  }
+/* ------------------------------------------------------------------ */
+/* Responsive                                                          */
+/* ------------------------------------------------------------------ */
 
-  .toolbar {
-    top: 9.4rem;
+@media (max-width: 1023px) {
+  html[data-header="sticky"] .page-header {
+    top: 4rem;
   }
 }
 
@@ -658,8 +1169,6 @@ a:active {
   .page-header {
     align-items: flex-start;
     flex-direction: column;
-    margin: -1.25rem calc(var(--gutter, 1rem) * -1) 0;
-    padding: 1rem;
   }
 
   .page-actions {
@@ -672,9 +1181,20 @@ a:active {
   }
 
   .toolbar {
-    position: relative;
-    top: auto;
     margin-top: 1rem;
+  }
+
+  /*
+   * A section heading is a title and an action side by side. On a narrow
+   * screen there is not room for both, and the action carries `shrink-0`
+   * because squashing a button is worse than moving it, so the row wraps.
+   */
+  .section-heading {
+    flex-wrap: wrap;
+  }
+
+  .section-heading > * {
+    max-width: 100%;
   }
 
   .toolbar > input,
@@ -699,7 +1219,7 @@ a:active {
   }
 
   .panel {
-    padding: 1rem;
+    padding: min(var(--card-padding), 16px);
   }
 
   pre,
@@ -711,21 +1231,17 @@ a:active {
 }
 
 @media (max-width: 640px) {
-  .app-main {
-    padding-inline: 1rem;
-  }
-
   .btn,
   .btn-primary,
   .btn-cta,
   .btn-ghost,
   .btn-danger {
-    min-height: 44px;
+    min-height: max(44px, var(--control-height));
   }
 
   .metric-card {
-    min-height: 8.5rem;
-    padding: 1rem;
+    min-height: min(var(--metric-height), 136px);
+    padding: min(var(--card-padding), 16px);
   }
 
   .mobile-record-grid {

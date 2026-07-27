@@ -35,11 +35,31 @@ const WIDTHS = arg("widths", "320,360,390,430,768,1024").split(",").map(Number);
 
 const ROUTES = [
   { path: "/", name: "overview" },
+  { path: "/analytics", name: "analytics" },
   { path: "/queue", name: "queue" },
   { path: "/leads", name: "leads" },
   { path: "/leads?stage=DISCOVERED", name: "leads filtered" },
   { path: "/suppression", name: "suppression" },
   { path: "/settings", name: "settings" },
+  { path: "/site-control", name: "site control" },
+  {
+    path: "/site-control",
+    name: "site control, every tab",
+    async open(page) {
+      // Each tab renders different controls, so one visit only proves one of
+      // them fits. Sliders and colour rows are the likeliest to push wide.
+      for (const tab of ["Colour", "Corners", "Type", "Sizing", "Motion", "Layout", "Brand"]) {
+        const button = page.getByRole("button", { name: tab, exact: true }).first();
+        if (await button.count()) {
+          await button.click().catch(() => {});
+          await page.waitForTimeout(220);
+          const found = await page.evaluate(PROBE);
+          if (found.length) page.__extra = [...(page.__extra ?? []), ...found.map((f) => ({ ...f, tab }))];
+        }
+      }
+      await page.waitForTimeout(200);
+    },
+  },
   {
     path: "/leads",
     name: "leads with filters open",
@@ -133,11 +153,41 @@ async function signIn(context) {
   await page.close();
 }
 
+/**
+ * Applies a theme preset through the interface before measuring.
+ *
+ * Layout is now a setting, so "nothing overflows" is only true of the theme in
+ * force. A preset with looser spacing, larger display type or a wider sidebar
+ * is a different layout and has to be measured as one.
+ */
+async function applyPreset(context, preset) {
+  const page = await context.newPage();
+  await page.goto(`${BASE}/site-control`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  const button = page.getByRole("button", { name: new RegExp(`^${preset}`, "i") }).first();
+  if ((await button.count()) === 0) throw new Error(`audit could not find the ${preset} preset`);
+  await button.click();
+  await page.waitForTimeout(500);
+  const save = page.getByRole("button", { name: /Save appearance/ });
+  if (await save.count()) await save.click();
+  await page.waitForTimeout(1200);
+  await page.close();
+}
+
 const PREINSTALLED = "/opt/pw-browsers/chromium";
 const browser = await chromium.launch(fs.existsSync(PREINSTALLED) ? { executablePath: PREINSTALLED } : {});
 const findings = [];
 let checks = 0;
 if (SHOTS) fs.rmSync(SHOT_DIR, { recursive: true, force: true });
+
+const PRESET = arg("preset", "");
+if (PRESET) {
+  const setup = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await signIn(setup);
+  await applyPreset(setup, PRESET);
+  await setup.close();
+  console.log(`theme in force: ${PRESET}`);
+}
 
 for (const width of WIDTHS) {
   const context = await browser.newContext({
@@ -156,9 +206,10 @@ for (const width of WIDTHS) {
     if (route.open) await route.open(page).catch(() => {});
     await page.waitForTimeout(200);
 
-    const found = await page.evaluate(PROBE);
+    const found = [...(await page.evaluate(PROBE)), ...(page.__extra ?? [])];
+    page.__extra = [];
     checks++;
-    for (const f of found) findings.push({ width, route: route.name, ...f });
+    for (const f of found) findings.push({ width, route: route.name + (f.tab ? `, ${f.tab}` : ""), ...f });
 
     if (SHOTS) {
       fs.mkdirSync(SHOT_DIR, { recursive: true });

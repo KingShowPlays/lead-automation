@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiFlashlightFill, RiLoader4Line, RiLockPasswordLine } from "react-icons/ri";
+import { RiLoader4Line, RiLockPasswordLine } from "react-icons/ri";
+import { LogoMark } from "@/components/Logo";
 
 function LoginForm() {
   const router = useRouter();
@@ -40,9 +41,7 @@ function LoginForm() {
   return (
     <main className="flex min-h-dvh w-full items-center justify-center p-4">
       <div className="glass-card w-full max-w-sm border-t-4 border-t-brand-600 p-6 sm:p-8">
-        <span className="flex h-11 w-11 items-center justify-center bg-brand-600">
-          <RiFlashlightFill className="h-6 w-6 text-white" />
-        </span>
+        <LogoMark className="h-12 w-12 text-ink" title="YEAN Technologies" />
         <h1 className="mt-5 font-heading text-2xl font-extrabold tracking-tight">
           YEAN<span className="text-brand-600"> Leads</span>
         </h1>

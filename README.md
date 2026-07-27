@@ -30,6 +30,33 @@ Stack: Node.js, Express and TypeScript on the server, MongoDB via Mongoose, a Ne
 | 8. Follow up | Exactly **one** follow-up after N days, only if no response. Daily email cap. Full audit log | `server/src/services/outreach` |
 | 9. Win | Record replies, mark **Interested** → **Converted** with deal value. Revenue shows on the overview | CRM routes |
 
+### Theme control
+
+The whole interface is data. Colour, corner radius, borders, type, spacing,
+motion, texture and the order of the navigation and overview sections all live
+in one document, editable from **Theme control** at `/site-control` and shared by
+everyone who signs in.
+
+Seven presets ship with it, from the flat black, white and forest green house
+look through to a studio treatment with momentum scrolling and a reactive
+cursor, a rounded and elevated one, two dark ones, an editorial serif and a
+brutalist high-contrast. Any of them is a starting point rather than a choice:
+every token behind it stays editable.
+
+The tokens are resolved on the server and written into the document before the
+first byte of markup, so the first frame a browser paints is already the right
+one, and edits are applied by rewriting one stylesheet rather than re-rendering
+the page. That is what keeps it from flickering.
+
+| Where | What |
+|---|---|
+| `dashboard/src/lib/theme/tokens.ts` | The token schema, defaults, normaliser and CSS emission |
+| `dashboard/src/lib/theme/presets.ts` | The shipped looks |
+| `dashboard/src/lib/theme/provider.tsx` | Applies tokens to the document without re-rendering |
+| `dashboard/src/lib/theme/motion.tsx` | Reveal, stagger, counters, magnetic, cursor, momentum scroll |
+| `dashboard/src/app/site-control/page.tsx` | The editor |
+| `server/src/models/SiteTheme.ts` | Where it is stored |
+
 ## Monorepo layout
 
 ```
@@ -128,6 +155,7 @@ GET/PUT /api/settings                 cities, categories, providers, sources, we
 POST /api/settings/onboarding         mark first-run setup complete or re-open it
 POST /api/settings/test-ai|test-email|test-places   provider connection tests
 GET  /api/stats                       funnel, revenue, integrations, leads by source
+GET/PUT/DELETE /api/theme             the dashboard's appearance, edited from /site-control
 ```
 
 The dashboard uses the background job routes, so a browser/Railway request

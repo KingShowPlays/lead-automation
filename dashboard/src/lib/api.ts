@@ -184,6 +184,13 @@ export const api = {
 
   integrationStatus: () => req<IntegrationStatus>(`/api/settings/integrations`),
 
+  theme: () => req<{ theme: unknown; updatedAt?: string }>(`/api/theme`),
+
+  saveTheme: (theme: unknown) =>
+    req<{ theme: unknown }>(`/api/theme`, { method: "PUT", body: JSON.stringify({ theme }) }),
+
+  resetTheme: () => req<{ theme: unknown }>(`/api/theme`, { method: "DELETE" }),
+
   testAi: () => req<TestResult>(`/api/settings/test-ai`, { method: "POST", body: "{}" }),
   testEmail: () => req<TestResult>(`/api/settings/test-email`, { method: "POST", body: "{}" }),
   testPlaces: () => req<TestResult>(`/api/settings/test-places`, { method: "POST", body: "{}" }),

@@ -105,7 +105,7 @@ export default function AnalyticsPage() {
             <AnalyticsMetric icon={<RiPulseLine />} label="Average priority" value={stats.scores.averagePriority} context={`Need ${stats.scores.averageNeed} · reach ${stats.scores.averageReach}`} accent="accent-cta" />
             <AnalyticsMetric icon={<RiTimeLine />} label="New or emerging" value={stats.totals.newBusinesses + stats.totals.emergingBusinesses} context={`${derived.freshnessRate}% of this cohort`} href="/leads?maturity=NEW,EMERGING" accent="accent-purple" />
             <AnalyticsMetric icon={<RiContactsBook2Line />} label="Contactable now" value={stats.totals.contactableAny} context={`${derived.contactableRate}% have a route`} href="/leads?contactable=any" accent="accent-emerald" />
-            <AnalyticsMetric icon={<RiTrophyLine />} label="Revenue won" value={`₦${stats.revenue.totalDealValue.toLocaleString()}`} context={`${stats.revenue.convertedDeals} converted deals`} accent="accent-slate" />
+            <AnalyticsMetric icon={<RiTrophyLine />} label="Revenue won" value={stats.revenue.totalDealValue} prefix="₦" context={`${stats.revenue.convertedDeals} converted deals`} accent="accent-slate" />
           </section>
 
           <section className="mt-6 grid items-start gap-6 xl:grid-cols-12">
@@ -246,11 +246,14 @@ export default function AnalyticsPage() {
   );
 }
 
-function AnalyticsMetric({ icon, label, value, context, accent, href }: { icon: React.ReactNode; label: string; value: number | string; context: string; accent: string; href?: string }) {
+function AnalyticsMetric({ icon, label, value, prefix, context, accent, href }: { icon: React.ReactNode; label: string; value: number | string; prefix?: string; context: string; accent: string; href?: string }) {
   const card = (
     <div className={`metric-card ${accent} h-full`}>
       <span className="metric-icon text-brand-600">{icon}</span>
-      <p className="metric-value break-words">{typeof value === "number" ? value.toLocaleString() : value}</p>
+      <p className="metric-value break-words">
+        {prefix && <span className="currency-mark">{prefix}</span>}
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
       <p className="metric-label">{label}</p>
       <p className="metric-context">{context}</p>
     </div>

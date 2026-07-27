@@ -1,14 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Space_Grotesk } from "next/font/google";
+import { Archivo, Azeret_Mono, DM_Sans, Space_Grotesk } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { RiLoader4Line } from "react-icons/ri";
-import { Sidebar } from "@/components/Sidebar";
-import { OnboardingGate } from "@/components/OnboardingGate";
+import { AppShell } from "@/components/AppShell";
+import { ThemeProvider, THEME_STYLE_ID } from "@/lib/theme/provider";
+import { MotionRuntime } from "@/lib/theme/motion";
+import { loadTheme } from "@/lib/theme/server";
+import { themeToAttributes, themeToCss } from "@/lib/theme/tokens";
 import "./globals.css";
 import "./enhancements.css";
 
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
+/*
+ * Every family the theme can select is loaded here rather than fetched when it
+ * is chosen. Swapping a font at runtime would otherwise mean a request, a
+ * repaint and a reflow in the middle of the interface, which is the visible
+ * flicker this design exists to avoid.
+ */
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], display: "swap", variable: "--font-space-grotesk" });
+const dmSans = DM_Sans({ subsets: ["latin"], display: "swap", variable: "--font-dm-sans" });
+const archivo = Archivo({ subsets: ["latin"], display: "swap", variable: "--font-archivo" });
+const azeretMono = Azeret_Mono({ subsets: ["latin"], display: "swap", variable: "--font-azeret-mono" });
 
 export const metadata: Metadata = {
   title: "YEAN Leads, approval dashboard",
@@ -20,27 +31,60 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/** The theme is read per request, so an edit is live on the next navigation. */
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = await loadTheme();
+  const fonts = [spaceGrotesk, dmSans, archivo, azeretMono].map((f) => f.variable).join(" ");
+
+  /*
+   * The theme is resolved on the server and written into the markup, so the
+   * first frame the browser paints is already the right one. There is no boot
+   * script reading storage, no effect correcting colours after hydration, and
+   * so no flash of the wrong interface.
+   *
+   * Dark mode is decided here too when the mode is explicit. Only "system"
+   * needs the inline script below, because the server cannot know what the
+   * viewer's operating system prefers; that script runs before the first paint,
+   * so it is still flash free.
+   */
+  const attributes = themeToAttributes(theme);
+  const explicitDark = theme.mode === "dark";
+
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${dmSans.variable}`}>
+    <html
+      lang="en"
+      className={`${fonts}${explicitDark ? " dark" : ""}`}
+      style={{ colorScheme: explicitDark ? "dark" : "light" }}
+      suppressHydrationWarning
+      {...attributes}
+    >
+      <head>
+        <style id={THEME_STYLE_ID} dangerouslySetInnerHTML={{ __html: themeToCss(theme) }} />
+        {theme.mode === "system" && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                "try{if(matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}}catch(e){}",
+            }}
+          />
+        )}
+      </head>
       <body>
-        <OnboardingGate>
-          <div className="app-shell flex">
-            <Sidebar />
-            <main className="app-main min-w-0 flex-1 overflow-x-hidden px-4 pb-16 pt-20 sm:px-6 lg:px-8 lg:pt-8">
-              {children}
-            </main>
-          </div>
-        </OnboardingGate>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: "!border !border-slate-700 !bg-slate-900 !text-white dark:!border-slate-200 dark:!bg-white dark:!text-slate-900",
-            loading: {
-              icon: <RiLoader4Line className="h-5 w-5 shrink-0 animate-spin" aria-hidden="true" />,
-            },
-          }}
-        />
+        <ThemeProvider initial={theme}>
+          <AppShell>{children}</AppShell>
+          <MotionRuntime />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: "!border !border-line !bg-surface !text-ink",
+              loading: {
+                icon: <RiLoader4Line className="h-5 w-5 shrink-0 animate-spin" aria-hidden="true" />,
+              },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

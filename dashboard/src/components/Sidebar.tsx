@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   RiDashboardLine,
   RiBarChartBoxLine,
@@ -10,30 +10,47 @@ import {
   RiContactsBook2Line,
   RiForbidLine,
   RiSettings4Line,
+  RiPaletteLine,
   RiMenuLine,
   RiCloseLine,
-  RiFlashlightFill,
   RiArrowLeftSLine,
   RiArrowRightSLine,
 } from "react-icons/ri";
+import type { IconType } from "react-icons";
 import { api } from "@/lib/api";
+import { Brand } from "@/components/Logo";
+import { useTheme } from "@/lib/theme/provider";
+import { NAV_ITEMS } from "@/lib/theme/tokens";
 
-const NAV = [
-  { href: "/", label: "Overview", icon: RiDashboardLine },
-  { href: "/analytics", label: "Analytics", icon: RiBarChartBoxLine },
-  { href: "/queue", label: "Approval queue", icon: RiInboxArchiveLine },
-  { href: "/leads", label: "All leads", icon: RiContactsBook2Line },
-  { href: "/suppression", label: "Suppression", icon: RiForbidLine },
-  { href: "/settings", label: "Settings", icon: RiSettings4Line },
-];
+/** Everything a nav id needs to become a link. Order and visibility come from the theme. */
+const NAV_DEFS: Record<string, { href: string; icon: IconType }> = {
+  overview: { href: "/", icon: RiDashboardLine },
+  analytics: { href: "/analytics", icon: RiBarChartBoxLine },
+  queue: { href: "/queue", icon: RiInboxArchiveLine },
+  leads: { href: "/leads", icon: RiContactsBook2Line },
+  suppression: { href: "/suppression", icon: RiForbidLine },
+  "site-control": { href: "/site-control", icon: RiPaletteLine },
+  settings: { href: "/settings", icon: RiSettings4Line },
+};
+
+const NAV_LABELS: Record<string, string> = Object.fromEntries(NAV_ITEMS.map((n) => [n.id, n.label]));
 
 const SETTINGS_SECTIONS = ["Discovery", "AI writer", "Email", "Lead sources", "Scheduler", "Guardrails", "Scoring"];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [pending, setPending] = useState<number | null>(null);
+
+  const items = useMemo(
+    () =>
+      theme.layout.navOrder
+        .filter((id) => !theme.layout.navHidden.includes(id) && NAV_DEFS[id])
+        .map((id) => ({ id, label: NAV_LABELS[id] ?? id, ...NAV_DEFS[id] })),
+    [theme.layout.navOrder, theme.layout.navHidden],
+  );
 
   useEffect(() => {
     setOpen(false);
@@ -86,22 +103,23 @@ export function Sidebar() {
       <p className={`px-4 pb-2 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 ${compact ? "sr-only" : ""}`}>
         Workspace
       </p>
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {items.map(({ id: itemId, href, label, icon: Icon }) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        const queueCount = href === "/queue" ? pending : null;
+        const queueCount = itemId === "queue" ? pending : null;
         return (
           <Link
-            key={href}
+            key={itemId}
             href={href}
             title={compact ? label : undefined}
             aria-current={active ? "page" : undefined}
-            className={`relative flex min-h-12 items-center border-b border-slate-200 text-sm font-semibold dark:border-slate-800 ${
+            className={`relative flex items-center border-b border-slate-200 text-sm font-semibold dark:border-slate-800 ${
               compact ? "justify-center px-0" : "gap-3 px-4"
             } ${
               active
                 ? "border-l-4 border-l-brand-600 bg-brand-500/10 text-brand-700 dark:text-brand-400"
                 : "border-l-4 border-l-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900"
             }`}
+            style={{ minHeight: "var(--control-height)" }}
           >
             <Icon className="h-5 w-5 shrink-0" />
             {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
@@ -143,8 +161,8 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`sticky top-0 hidden h-screen h-dvh shrink-0 flex-col border-r border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-slate-950 ${
-          collapsed ? "w-20" : "w-64"
+        className={`app-sidebar sticky top-0 hidden h-screen h-dvh shrink-0 flex-col border-r border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-slate-950 ${
+          collapsed ? "!w-20" : ""
         }`}
       >
         <div className={`flex h-20 items-center border-b border-slate-200 dark:border-slate-800 ${collapsed ? "justify-center px-2" : "px-5"}`}>
@@ -198,26 +216,12 @@ function SettingsSectionNavigation() {
 }
 
 function EngineNote() {
+  const { theme } = useTheme();
   return (
     <div className="border-t border-slate-200 p-5 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
-      <p className="font-heading font-bold text-slate-800 dark:text-slate-200">YEAN Technologies</p>
-      <p className="mt-1">Lead operations workspace</p>
-      <p className="mt-3 border-l-2 border-brand-600 pl-3">Discover → Check → Score → Pitch → Approve → Win.</p>
+      <p className="font-heading font-bold text-slate-800 dark:text-slate-200">{theme.brand.productName}</p>
+      <p className="mt-1">{theme.brand.tagline}</p>
+      <p className="mt-3 border-l-2 border-brand-600 pl-3">Discover, check, score, pitch, approve, win.</p>
     </div>
-  );
-}
-
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <Link href="/" className="flex items-center gap-2.5" aria-label="YEAN Leads overview" title={compact ? "YEAN Leads" : undefined}>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-brand-600">
-        <RiFlashlightFill className="h-5 w-5 text-white" />
-      </span>
-      {!compact && (
-        <span className="font-heading text-lg font-bold tracking-tight">
-          YEAN<span className="text-brand-600 dark:text-brand-500"> Leads</span>
-        </span>
-      )}
-    </Link>
   );
 }
