@@ -53,13 +53,49 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   // Any successful write changes what every other view is showing. Announcing
   // it here means no call site can forget to, which is how counters drift.
-  if (init.method && init.method !== "GET") announceDataChange();
+  // The stats cache is dropped first, so the refetch the announcement triggers
+  // reads the new numbers rather than the ones from a moment ago.
+  if (init.method && init.method !== "GET") {
+    freshStats = null;
+    announceDataChange();
+  }
 
   return body as T;
 }
 
+/**
+ * Stats is asked for twice on every page.
+ *
+ * The sidebar wants one integer for the approval badge and each view wants the
+ * rest, and both fetch on mount, so two identical requests leave together. The
+ * endpoint counts and groups the whole collection, and running it twice at once
+ * meant the two runs contended: 3.3s of work took 7.5s, and the view's other
+ * requests queued behind it. The queue page showed skeletons for eight seconds
+ * because of it.
+ *
+ * The window only has to cover the mount burst. The view polls every 20s and
+ * the sidebar every 30s, and those are meant to be separate reads, so a few
+ * seconds collapses the duplicates without ever serving a stale number.
+ */
+const STATS_SHARE_MS = 3000;
+let freshStats: { at: number; request: Promise<Stats> } | null = null;
+
+function sharedStats(): Promise<Stats> {
+  const now = Date.now();
+  if (freshStats && now - freshStats.at < STATS_SHARE_MS) return freshStats.request;
+
+  const request = req<Stats>("/api/stats");
+  freshStats = { at: now, request };
+  // A rejection must not be held, or every caller for the next few seconds
+  // inherits one failure. Callers still see their own rejection.
+  request.catch(() => {
+    if (freshStats?.request === request) freshStats = null;
+  });
+  return request;
+}
+
 export const api = {
-  stats: () => req<Stats>("/api/stats"),
+  stats: sharedStats,
   analytics: (days: number | "all") => req<AnalyticsStats>(`/api/stats/analytics?days=${days}`),
 
   leads: (params: Record<string, string | number | undefined>) => {

@@ -45,8 +45,17 @@ export default function QueuePage() {
   const load = useCallback(() => {
     let cancelled = false;
     setRefreshing(true);
-    Promise.all([
-      api.leads({
+
+    /*
+     * The two requests are answered separately rather than waited on together.
+     * The queue itself comes back in well under a second; the channel tallies
+     * come from the stats endpoint, which counts the whole collection and takes
+     * several seconds. Waiting for both meant the work list sat behind the
+     * numbers above it, and the page showed skeletons the whole time for the
+     * sake of five figures on some buttons.
+     */
+    const queue = api
+      .leads({
         approvalStatus: "PENDING",
         stage: "PENDING_APPROVAL,APPROVED",
         sort: "-priority",
@@ -59,14 +68,11 @@ export default function QueuePage() {
          * you can act on.
          */
         channel: channel === "ALL" ? "EMAIL,INSTAGRAM_MANUAL,WHATSAPP" : channel,
-      }),
-      api.stats().catch(() => null),
-    ])
-      .then(([result, stats]: [{ items: Lead[]; total: number }, Stats | null]) => {
+      })
+      .then((result: { items: Lead[]; total: number }) => {
         if (cancelled) return;
         setLeads(result.items);
         setTotal(result.total);
-        setCounts(stats?.queueByChannel ?? null);
         setError(null);
         // The first lead opens so the page is useful on arrival; the rest stay
         // shut so a queue of five hundred is scannable.
@@ -74,10 +80,21 @@ export default function QueuePage() {
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setRefreshing(false);
       });
+
+    api
+      .stats()
+      .then((stats: Stats) => {
+        if (!cancelled) setCounts(stats.queueByChannel ?? null);
+      })
+      .catch(() => undefined);
+
+    // Only the queue itself governs the spinner. The tallies filling in a
+    // moment later is not the page still loading.
+    queue.finally(() => {
+      if (!cancelled) setRefreshing(false);
+    });
+
     return () => {
       cancelled = true;
     };

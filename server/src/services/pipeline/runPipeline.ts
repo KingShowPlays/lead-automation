@@ -713,22 +713,32 @@ export async function repairOutreachChannels(limit = 5000): Promise<{ checked: n
     .select("email instagramUsername phone phoneNormalized whatsappAvailable outreachChannel")
     .limit(limit);
 
-  let corrected = 0;
+  /*
+   * One write, not one per lead. This runs on every processing pass over every
+   * qualified lead, and issuing five hundred round trips held the database long
+   * enough that ordinary dashboard requests queued behind it and the approval
+   * queue rendered as skeletons while a scan was running.
+   */
+  const writes: Array<{ updateOne: { filter: Record<string, unknown>; update: Record<string, unknown> } }> = [];
   for (const lead of leads) {
     const before = lead.outreachChannel;
     const beforeFlag = lead.whatsappAvailable;
     assignChannel(lead);
     if (lead.outreachChannel !== before || lead.whatsappAvailable !== beforeFlag) {
-      await Lead.updateOne(
-        { _id: lead._id },
-        { $set: { outreachChannel: lead.outreachChannel, whatsappAvailable: lead.whatsappAvailable } },
-      );
-      corrected++;
+      writes.push({
+        updateOne: {
+          filter: { _id: lead._id },
+          update: { $set: { outreachChannel: lead.outreachChannel, whatsappAvailable: lead.whatsappAvailable } },
+        },
+      });
     }
   }
 
-  if (corrected > 0) logger.info({ checked: leads.length, corrected }, "outreach channels repaired");
-  return { checked: leads.length, corrected };
+  if (writes.length > 0) {
+    await Lead.bulkWrite(writes, { ordered: false });
+    logger.info({ checked: leads.length, corrected: writes.length }, "outreach channels repaired");
+  }
+  return { checked: leads.length, corrected: writes.length };
 }
 
 export interface DraftPendingResult {
