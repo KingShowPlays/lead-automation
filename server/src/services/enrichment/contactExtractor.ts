@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractEmails } from "../../utils/text.js";
-import { normalizeNigerianPhone, phoneFromWhatsAppLink } from "../../utils/phone.js";
+import { DEFAULT_COUNTRY, normalizePhone, phoneFromWhatsAppLink } from "../../utils/phone.js";
 import { instagramUsernameFromUrl } from "../../utils/url.js";
 import type { ExtractedContacts } from "../../types.js";
 
@@ -12,7 +12,7 @@ import type { ExtractedContacts } from "../../types.js";
  * publishes on its own public pages, and we record the exact source URL
  * for every value (NDPA provenance requirement).
  */
-export function extractContactsFromHtml(html: string, sourceUrl: string): ExtractedContacts {
+export function extractContactsFromHtml(html: string, sourceUrl: string, country = DEFAULT_COUNTRY): ExtractedContacts {
   const $ = cheerio.load(html);
   const out: ExtractedContacts = {
     emails: [],
@@ -42,7 +42,7 @@ export function extractContactsFromHtml(html: string, sourceUrl: string): Extrac
         }
       }
     } else if (href.startsWith("tel:")) {
-      const phone = normalizeNigerianPhone(href.slice(4));
+      const phone = normalizePhone(href.slice(4), country);
       if (phone && !seen.phone.has(phone)) {
         seen.phone.add(phone);
         out.phones.push({ value: phone, sourceUrl });
@@ -80,7 +80,7 @@ export function extractContactsFromHtml(html: string, sourceUrl: string): Extrac
   // 3) Nigerian phone patterns in visible text
   const phoneMatches = bodyText.match(/(?:\+?234|0)[\s-]?[789][01][\s-]?\d[\s-]?\d{3}[\s-]?\d{4}/g) ?? [];
   for (const raw of phoneMatches.slice(0, 10)) {
-    const phone = normalizeNigerianPhone(raw);
+    const phone = normalizePhone(raw, country);
     if (phone && !seen.phone.has(phone)) {
       seen.phone.add(phone);
       out.phones.push({ value: phone, sourceUrl });

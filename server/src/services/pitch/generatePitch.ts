@@ -96,15 +96,16 @@ Suggested YEAN solution: ${solution}
 Channel: ${CHANNEL_LABELS[ctx.outreachChannel as OutreachChannel] ?? "message"}
 
 Rules:
-- Open with a specific, genuine observation about THEIR business (use the website situation${ctx.recentPostSummary ? " or their recent post" : ""}). Never open with "I hope this finds you well".
-- 70 to 120 words for the message body. Friendly Nigerian business tone, professional but human. Use contractions ("we'd", "it's", "you'll"). Vary sentence length; put a short sentence next to a longer one.
-- Never use an em dash or en dash anywhere. Use a comma, a period, a colon, or parentheses instead. Straight quotes only. No emoji in email; at most one in a DM.
+- Begin with a greeting that names the business: "Hello ${ctx.businessName}," or "Hi ${ctx.businessName},", on its own line, then a blank line. Every message opens this way.
+- After the greeting, lead with a specific, genuine observation about THEIR business (use the website situation${ctx.recentPostSummary ? " or their recent post" : ""}). Never open with "I hope this finds you well".
+- 70 to 120 words for the message body. Formal and professional, the way one business writes to another it has not met. Courteous, direct, never chatty, never salesy. Contractions are fine in moderation. Vary sentence length; put a short sentence next to a longer one.
+- Never use an em dash or en dash anywhere. Use a comma, a period, a colon, or parentheses instead. Straight quotes only. No emoji anywhere, on any channel: the register is the same whether this is an email, a DM or a WhatsApp message.
 - No hype words: revolutionary, game-changing, seamless, robust, cutting-edge, elevate, unlock, supercharge, world-class. Make concrete claims instead.
 - Avoid "not just X, but Y" and "it's not A, it's B" constructions. Say the thing directly. Don't force lists of three.
 - Present the problem as an opportunity, never as an insult.
-- One clear, low-pressure call to action (a short reply or a quick chat).
+- One clear, low-pressure call to action (a short reply or a brief call).
 - Do NOT invent facts, prices, or statistics. Do NOT claim you visited the business.
-- Sign off as "The YEAN Technologies team".
+- Close formally: "Kind regards," on its own line, then "The YEAN Technologies team".
 
 Respond with ONLY valid JSON, no markdown fences:
 {"observation": "<the one-sentence personalised observation you opened with>", "subject": "<email subject line, max 9 words, specific not clickbait>", "message": "<the full message body>"}`;
@@ -309,11 +310,11 @@ export function templatePitch(ctx: PitchContext): PitchResult {
 
 ${opening} ${problemLine}
 
-We're YEAN Technologies, a web studio that builds sites for businesses like yours. We'd love to build you ${solution}.
+We are YEAN Technologies, a web studio that builds websites for businesses like yours. We would be glad to build you ${solution}.
 
-Would you be open to a quick chat about it? A short reply is all it takes.
+Would you be open to a brief conversation about it? A short reply is all we need.
 
-Warm regards,
+Kind regards,
 The YEAN Technologies team`;
 
   return {

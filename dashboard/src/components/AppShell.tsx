@@ -26,7 +26,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <OnboardingGate>
       <div className="app-shell flex">
         <Sidebar />
-        <main className="app-main min-w-0 flex-1 overflow-x-hidden pb-16 pt-20 lg:pt-8">
+        {/*
+          Clipping rather than hiding, for the same reason as the document:
+          `overflow-x: hidden` would make this a scroll container and confine
+          any sticky page header to it. The rule lives in globals.css so both
+          declarations can be given in order.
+        */}
+        <main className="app-main min-w-0 flex-1 pb-16 pt-20 lg:pt-8">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>

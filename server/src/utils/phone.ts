@@ -1,47 +1,152 @@
 /**
- * Nigerian phone number handling.
+ * Phone number handling.
  *
- * Accepts the common formats businesses publish:
- *   0803 123 4567, +234 803 123 4567, 234-803-123-4567, 08031234567,
- *   tel:+2348031234567, wa.me/2348031234567
- * and normalizes to E.164 (+2348031234567).
+ * This used to be Nigeria only, and not by configuration: every number went
+ * through a normaliser that stripped whatever country code it found and stamped
+ * +234 on the result. A Ghanaian or British number came out either wrong or, more
+ * often, null, because it failed the ten-digit check and was thrown away.
+ *
+ * Two rules now decide the country, in order:
+ *
+ *   1. If the number carries its own country code, that country wins. A number
+ *      written +233 24 123 4567 is Ghanaian no matter where the search ran.
+ *   2. Otherwise the number is national, and belongs to the country the search
+ *      is running in, which the operator sets and which defaults to Nigeria.
+ *
+ * Numbers from a country not in the table are kept rather than discarded: an
+ * unrecognised but well-formed international number is still a way to reach
+ * somebody, and silently deleting it is the worse failure.
  */
 
-const NG_MOBILE_PREFIXES = /^(70|80|81|90|91)\d{8}$/;
+export interface CountryPhoneRules {
+  iso: string;
+  name: string;
+  /** Dial code without the plus. */
+  dial: string;
+  /** Valid lengths for the national significant number. */
+  lengths: number[];
+  /** Digit the national format prefixes and international format drops. */
+  trunk?: string;
+  /** Leading digits of a mobile number, tested against the national number. */
+  mobile: RegExp;
+}
 
-export function normalizeNigerianPhone(raw: string | null | undefined): string | null {
+/**
+ * The countries this is expected to run in, plus the ones a Nigerian studio's
+ * leads most often carry. Anything else falls through to the generic path.
+ */
+export const COUNTRY_RULES: CountryPhoneRules[] = [
+  { iso: "NG", name: "Nigeria", dial: "234", lengths: [10], trunk: "0", mobile: /^(70|80|81|90|91)/ },
+  { iso: "GH", name: "Ghana", dial: "233", lengths: [9], trunk: "0", mobile: /^(2|5)/ },
+  { iso: "KE", name: "Kenya", dial: "254", lengths: [9], trunk: "0", mobile: /^(7|1)/ },
+  { iso: "ZA", name: "South Africa", dial: "27", lengths: [9], trunk: "0", mobile: /^(6|7|8)/ },
+  { iso: "EG", name: "Egypt", dial: "20", lengths: [10], trunk: "0", mobile: /^1/ },
+  { iso: "GB", name: "United Kingdom", dial: "44", lengths: [10], trunk: "0", mobile: /^7/ },
+  /*
+   * North America has no mobile prefix: the same ranges carry landlines and
+   * mobiles, so a number cannot be classified from its digits. These never
+   * match, which means such a lead is offered as a phone contact rather than
+   * being claimed as a WhatsApp one.
+   */
+  { iso: "US", name: "United States", dial: "1", lengths: [10], mobile: /(?!)/ },
+  { iso: "CA", name: "Canada", dial: "1", lengths: [10], mobile: /(?!)/ },
+  { iso: "IN", name: "India", dial: "91", lengths: [10], trunk: "0", mobile: /^[6-9]/ },
+  { iso: "AE", name: "United Arab Emirates", dial: "971", lengths: [9], trunk: "0", mobile: /^5/ },
+  { iso: "FR", name: "France", dial: "33", lengths: [9], trunk: "0", mobile: /^[67]/ },
+  { iso: "DE", name: "Germany", dial: "49", lengths: [10, 11], trunk: "0", mobile: /^1[5-7]/ },
+];
+
+export const DEFAULT_COUNTRY = "NG";
+
+const byIso = new Map(COUNTRY_RULES.map((c) => [c.iso, c]));
+
+/** Dial codes longest first, so +234 is matched before +23 would be. */
+const byDialLongestFirst = [...COUNTRY_RULES].sort((a, b) => b.dial.length - a.dial.length);
+
+export function rulesFor(iso: string | null | undefined): CountryPhoneRules {
+  return byIso.get((iso ?? DEFAULT_COUNTRY).toUpperCase()) ?? byIso.get(DEFAULT_COUNTRY)!;
+}
+
+/** Which country an already-normalised E.164 number belongs to. */
+export function countryOf(e164: string | null | undefined): CountryPhoneRules | null {
+  if (!e164 || !e164.startsWith("+")) return null;
+  const digits = e164.slice(1);
+  for (const rules of byDialLongestFirst) {
+    if (!digits.startsWith(rules.dial)) continue;
+    if (rules.lengths.includes(digits.length - rules.dial.length)) return rules;
+  }
+  return null;
+}
+
+function national(digits: string, rules: CountryPhoneRules): string | null {
+  let n = digits;
+  if (rules.trunk && n.startsWith(rules.trunk)) n = n.slice(rules.trunk.length);
+  return rules.lengths.includes(n.length) ? n : null;
+}
+
+/**
+ * Normalises to E.164.
+ *
+ * `country` is the ISO-2 code the number should be read as when it does not
+ * carry one of its own. It only ever acts as a default: a number written with
+ * an explicit country code keeps it.
+ */
+export function normalizePhone(raw: string | null | undefined, country: string = DEFAULT_COUNTRY): string | null {
   if (!raw) return null;
-  let digits = raw.replace(/[^\d+]/g, "");
-  if (!digits) return null;
 
-  if (digits.startsWith("+")) digits = digits.slice(1);
-  if (digits.startsWith("00")) digits = digits.slice(2);
+  const cleaned = raw.replace(/[^\d+]/g, "");
+  if (!cleaned) return null;
 
-  if (digits.startsWith("234")) {
-    digits = digits.slice(3);
-    // Some listings write +2340803..., drop the redundant trunk zero.
-    if (digits.startsWith("0")) digits = digits.slice(1);
-  } else if (digits.startsWith("0")) {
-    digits = digits.slice(1);
+  // An explicit international prefix means the number states its own country.
+  const international = cleaned.startsWith("+") || cleaned.startsWith("00");
+  let digits = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned.startsWith("00") ? cleaned.slice(2) : cleaned;
+  if (!/^\d+$/.test(digits)) return null;
+
+  const home = rulesFor(country);
+
+  // Written with the home country's dial code, with or without a plus.
+  if (digits.startsWith(home.dial)) {
+    const rest = national(digits.slice(home.dial.length), home);
+    if (rest) return `+${home.dial}${rest}`;
   }
 
-  // A valid NG national significant number is 10 digits (mobile), landlines
-  // vary but mobile is what matters for WhatsApp.
-  if (digits.length !== 10) return null;
-  if (!/^\d{10}$/.test(digits)) return null;
+  if (international) {
+    for (const rules of byDialLongestFirst) {
+      if (!digits.startsWith(rules.dial)) continue;
+      const rest = national(digits.slice(rules.dial.length), rules);
+      if (rest) return `+${rules.dial}${rest}`;
+    }
+    // A country this build does not know about. Keep it if it is a plausible
+    // E.164 number; discarding a real contact is worse than storing one this
+    // code cannot classify.
+    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    return null;
+  }
 
-  return `+234${digits}`;
+  // No country code: read it as a national number in the home country.
+  const rest = national(digits, home);
+  return rest ? `+${home.dial}${rest}` : null;
 }
 
-/** True when the number looks like a Nigerian mobile (and therefore possibly WhatsApp-capable). */
+/**
+ * Kept for the many call sites written when this only handled Nigeria. New code
+ * should call normalizePhone with the country it means.
+ */
+export function normalizeNigerianPhone(raw: string | null | undefined): string | null {
+  return normalizePhone(raw, "NG");
+}
+
+/** True when the number looks like a mobile, and so is plausibly on WhatsApp. */
 export function isLikelyMobile(e164: string | null | undefined): boolean {
-  if (!e164 || !e164.startsWith("+234")) return false;
-  return NG_MOBILE_PREFIXES.test(e164.slice(4));
+  const rules = countryOf(e164);
+  if (!rules || !e164) return false;
+  return rules.mobile.test(e164.slice(1 + rules.dial.length));
 }
 
-/** Extracts the phone number from a wa.me / api.whatsapp.com link, normalized to E.164. */
-export function phoneFromWhatsAppLink(url: string): string | null {
+/** Extracts the phone number from a wa.me / api.whatsapp.com link. */
+export function phoneFromWhatsAppLink(url: string, country: string = DEFAULT_COUNTRY): string | null {
   const m = url.match(/(?:wa\.me\/|api\.whatsapp\.com\/send\/?\?phone=|whatsapp:\/\/send\?phone=)\+?(\d{7,15})/i);
   if (!m) return null;
-  return normalizeNigerianPhone(m[1]);
+  // A wa.me number is always international, even without the plus.
+  return normalizePhone(`+${m[1]}`, country);
 }

@@ -21,6 +21,7 @@ import {
   RiRestartLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
+import { COUNTRIES } from "@/lib/contacts";
 import type { Settings, TestResult } from "@/lib/types";
 
 const NEED_WEIGHT_LABELS: Record<string, string> = {
@@ -156,6 +157,8 @@ export default function SettingsPage() {
         discoveryEnabled: settings.discoveryEnabled,
         maxResultsPerQuery: settings.maxResultsPerQuery,
         placesRequestsPerMinute: settings.placesRequestsPerMinute,
+        defaultCountry: settings.defaultCountry ?? "NG",
+        pitch: settings.pitch ?? { reuseAcrossSimilarLeads: true },
         integrations: settings.integrations,
       });
       setSettings(withDefaults(r.settings));
@@ -227,6 +230,17 @@ export default function SettingsPage() {
           />
           <TestButton label="Test Places" run={api.testPlaces} beforeTest={save} />
 
+          <SelectField
+            label="Country these searches run in"
+            value={settings.defaultCountry ?? "NG"}
+            options={COUNTRIES.map((c) => ({ value: c.iso, label: `${c.name} (+${c.dial})` }))}
+            onChange={(v) => upd({ defaultCountry: v })}
+          />
+          <p className="-mt-2 text-xs leading-relaxed text-slate-400">
+            Only used to read a phone number written without a country code. A number that carries its own country code
+            keeps it, whatever this is set to.
+          </p>
+
           <TagEditor
             label="Cities"
             items={settings.cities}
@@ -242,6 +256,7 @@ export default function SettingsPage() {
             newValue={newCategory}
             setNewValue={setNewCategory}
             onAdd={(v) => upd({ categories: [...settings.categories, v] })}
+
             onRemove={(v) => upd({ categories: settings.categories.filter((c) => c !== v) })}
             placeholder="Add category (e.g. gyms)"
           />

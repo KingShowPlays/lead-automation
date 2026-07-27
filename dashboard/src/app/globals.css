@@ -90,7 +90,16 @@ body {
   width: 100%;
   min-width: 0;
   min-height: 100%;
+  /*
+   * `clip`, not `hidden`. Both stop sideways scrolling, but `hidden` makes the
+   * element a scroll container, and a sticky child then sticks to that box
+   * rather than to the viewport. That is why the sidebar scrolled away with the
+   * page: it was sticky to a container that never scrolls. `clip` does not
+   * create a scroll container, so sticky works and nothing can escape sideways.
+   * The `hidden` line stays as the fallback for anything too old for `clip`.
+   */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 html {
@@ -517,6 +526,8 @@ html[data-sidebar="right"] .app-shell {
   min-height: 100vh;
   min-height: 100dvh;
   padding-inline: var(--gutter-x);
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 @media (max-width: 767px) {
@@ -798,6 +809,21 @@ html[data-header="sticky"] .page-header {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+}
+
+/*
+ * Columns keep the widths declared for them, whatever the rows contain. With
+ * automatic layout a page of leads that have not been processed yet, and so
+ * have empty cells in five of seven columns, collapsed those columns and
+ * squeezed the business name into the remainder.
+ */
+.data-table-fixed {
+  table-layout: fixed;
+}
+
+.data-table-fixed td,
+.data-table-fixed th {
+  overflow-wrap: normal;
 }
 
 .data-table thead {

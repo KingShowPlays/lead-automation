@@ -48,10 +48,36 @@ function finalStatus(discovery?: DiscoverResult, processing?: BatchProcessResult
   return "COMPLETED";
 }
 
+/**
+ * How long a job may go without a heartbeat before it is presumed dead.
+ *
+ * The heartbeat below is independent of progress, so silence means the process
+ * is gone, not that a slow batch is still running. Two minutes is many beats.
+ */
+const JOB_STALE_AFTER_MS = 2 * 60_000;
+const JOB_HEARTBEAT_MS = 15_000;
+
 async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
   const jobId = String(job._id);
   let discovery: DiscoverResult | undefined;
   let processing: BatchProcessResult | undefined;
+
+  /*
+   * A beat on a timer, not only on progress.
+   *
+   * Progress updates already touched heartbeatAt, but nothing ever read it, and
+   * a job that died without unwinding, a killed process, a container replaced
+   * mid-scan, kept `activeKey` forever. The dashboard then showed "Running" for
+   * good: refreshing did not help, because the stuck state was in the database.
+   * Beating on a timer makes silence mean something, and getPipelineOperational-
+   * Status below acts on it.
+   */
+  const heartbeat = setInterval(() => {
+    void PipelineJob.updateOne({ _id: jobId, activeKey: "pipeline" }, { $set: { heartbeatAt: new Date() } }).catch(
+      () => undefined,
+    );
+  }, JOB_HEARTBEAT_MS);
+  heartbeat.unref();
 
   try {
     await updateJob(jobId, {
@@ -168,7 +194,43 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
         $unset: { activeKey: 1 },
       },
     ).catch(() => undefined);
+  } finally {
+    clearInterval(heartbeat);
   }
+}
+
+/**
+ * Fails a job that has stopped beating, and releases the lock it was holding.
+ *
+ * Called on every status read, which is the only place that reliably runs while
+ * a dead job is stuck: the process that would have cleaned up is by definition
+ * gone. Without it the dashboard sits on "Running" until somebody restarts the
+ * service, and no new scan can start because the lock is still taken.
+ */
+async function failStaleJob(job: PipelineJobDocument): Promise<boolean> {
+  const lastBeat = job.heartbeatAt?.getTime() ?? job.startedAt?.getTime() ?? 0;
+  if (Date.now() - lastBeat < JOB_STALE_AFTER_MS) return false;
+
+  const message = "The scan stopped responding and was ended. Resume it, or process the leads it already found.";
+  await PipelineJob.updateOne(
+    { _id: job._id, activeKey: "pipeline" },
+    {
+      $set: {
+        status: "FAILED",
+        phase: "COMPLETE",
+        finishedAt: new Date(),
+        error: message,
+        "progress.message": message,
+      },
+      $unset: { activeKey: 1 },
+    },
+  ).catch(() => undefined);
+
+  // The work is not coming back, so the lock must not outlive it.
+  await PipelineLease.deleteMany({}).catch(() => undefined);
+
+  logger.warn({ jobId: String(job._id), type: job.type }, "pipeline job stopped heartbeating, marked failed");
+  return true;
 }
 
 export async function startPipelineJob(options: StartPipelineJobOptions): Promise<PipelineJobDocument> {
@@ -237,7 +299,7 @@ export async function getPipelineOperationalStatus(): Promise<{
   const RESUMABLE_WINDOW_DAYS = 7;
   const resumableSince = new Date(Date.now() - RESUMABLE_WINDOW_DAYS * 86_400_000);
 
-  const [activeJob, latestJob, discoveredPending, pitchPending, candidates] = await Promise.all([
+  const [rawActiveJob, latestJob, discoveredPending, pitchPending, candidates] = await Promise.all([
     PipelineJob.findOne({ activeKey: "pipeline" }).sort({ createdAt: -1 }),
     PipelineJob.findOne().sort({ createdAt: -1 }),
     // Leads that have already failed processing repeatedly are not work this
@@ -264,6 +326,15 @@ export async function getPipelineOperationalStatus(): Promise<{
       .limit(10),
   ]);
 
+  // A job that has stopped beating is not active, it is finished badly. Saying
+  // so here is what unsticks the dashboard without a restart.
+  const failed = rawActiveJob ? await failStaleJob(rawActiveJob) : false;
+  const activeJob = failed ? null : rawActiveJob;
+  // latestJob was read in parallel with that decision, so it still says RUNNING.
+  // Re-read it, or the operator is told the scan is running and not running at
+  // the same time.
+  const currentLatest = failed ? await PipelineJob.findOne().sort({ createdAt: -1 }) : latestJob;
+
   let resumableRun: {
     runId: string;
     status: string;
@@ -283,7 +354,7 @@ export async function getPipelineOperationalStatus(): Promise<{
     }
   }
 
-  return { activeJob, latestJob, discoveredPending, pitchPending, resumableRun };
+  return { activeJob, latestJob: currentLatest, discoveredPending, pitchPending, resumableRun };
 }
 
 /**

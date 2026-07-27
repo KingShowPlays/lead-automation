@@ -19,6 +19,7 @@ import {
 import { getActiveEmail } from "../services/outreach/email/index.js";
 import { searchPlaces } from "../services/discovery/googlePlaces.js";
 import { reloadScheduler } from "../services/scheduler.js";
+import { COUNTRY_RULES } from "../utils/phone.js";
 import { logger } from "../utils/logger.js";
 
 export const settingsRouter = Router();
@@ -242,6 +243,12 @@ settingsRouter.put(
         placesRequestsPerMinute: z.number().int().min(1).max(120).optional(),
         integrations: integrationsSchema.optional(),
         pitch: z.object({ reuseAcrossSimilarLeads: z.boolean().optional() }).strict().optional(),
+        defaultCountry: z
+          .string()
+          .length(2)
+          .transform((v) => v.toUpperCase())
+          .refine((v) => COUNTRY_RULES.some((c) => c.iso === v), "unsupported country code")
+          .optional(),
       })
       .strict(),
   ),

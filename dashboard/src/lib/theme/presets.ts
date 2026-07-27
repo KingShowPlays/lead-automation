@@ -255,10 +255,10 @@ export const PRESETS: Preset[] = [
   {
     id: "terminal",
     name: "Terminal",
-    description: "Monospace throughout, phosphor green on near black, zero corners and motion that snaps rather than glides.",
+    description: "Monospace throughout, phosphor green on near black, zero corners and motion that snaps rather than glides. Follows the system between its light and dark palettes.",
     swatch: ["#050705", "#c8f7d4", "#3ef07a"],
     theme: {
-      mode: "dark",
+      mode: "system",
       neutral: { hue: 140, saturation: 10 },
       dark: {
         canvas: "#050705",
@@ -323,7 +323,7 @@ export const PRESETS: Preset[] = [
         pulse: true,
         underline: true,
       },
-      effects: { shadow: 0, gridTexture: true, noise: true, gradients: false, glass: false, glow: true, scanlines: true, vignette: true },
+      effects: { shadow: 0, gridTexture: false, noise: true, gradients: false, glass: false, glow: true, scanlines: false, vignette: false },
     },
   },
   {

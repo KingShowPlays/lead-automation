@@ -19,7 +19,7 @@ import { PitchGroupCache, type GroupedPitch } from "../pitch/pitchGroups.js";
 import { assignChannel } from "../outreach/channel.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
-import { normalizeNigerianPhone } from "../../utils/phone.js";
+import { DEFAULT_COUNTRY, normalizePhone } from "../../utils/phone.js";
 import { mapWithConcurrency } from "../../utils/async.js";
 import { getCheckerRuntime, getPlacesKey } from "../../config/runtime.js";
 import { runExtraSources, type SourceRunStats } from "../discovery/sources/runSources.js";
@@ -124,7 +124,7 @@ async function discoverUnlocked(
         stats.found = businesses.length;
 
         for (const biz of businesses) {
-          const outcome = await upsertDiscovered(biz);
+          const outcome = await upsertDiscovered(biz, settings.defaultCountry);
           stats[outcome]++;
         }
       } catch (err) {
@@ -244,25 +244,28 @@ export async function resumeDiscoveryRun(
 export type UpsertOutcome = "created" | "duplicates" | "suppressed";
 
 /** Places-specific adapter: maps a DiscoveredBusiness to the shared upsert. */
-async function upsertDiscovered(biz: DiscoveredBusiness): Promise<UpsertOutcome> {
-  return upsertIncomingLead({
-    businessName: biz.businessName,
-    category: biz.category,
-    categoryRaw: biz.categoryRaw,
-    city: biz.city,
-    address: biz.address,
-    location: biz.location,
-    googlePlaceId: biz.googlePlaceId,
-    googleMapsUrl: biz.googleMapsUrl,
-    businessStatus: biz.businessStatus,
-    openingSoon: biz.openingSoon,
-    rating: biz.rating,
-    userRatingCount: biz.userRatingCount,
-    phone: biz.phone,
-    websiteUrl: biz.websiteUrl,
-    searchQuery: biz.searchQuery,
-    discoverySource: "google_places",
-  });
+async function upsertDiscovered(biz: DiscoveredBusiness, country: string): Promise<UpsertOutcome> {
+  return upsertIncomingLead(
+    {
+      businessName: biz.businessName,
+      category: biz.category,
+      categoryRaw: biz.categoryRaw,
+      city: biz.city,
+      address: biz.address,
+      location: biz.location,
+      googlePlaceId: biz.googlePlaceId,
+      googleMapsUrl: biz.googleMapsUrl,
+      businessStatus: biz.businessStatus,
+      openingSoon: biz.openingSoon,
+      rating: biz.rating,
+      userRatingCount: biz.userRatingCount,
+      phone: biz.phone,
+      websiteUrl: biz.websiteUrl,
+      searchQuery: biz.searchQuery,
+      discoverySource: "google_places",
+    },
+    country,
+  );
 }
 
 /**
@@ -271,7 +274,10 @@ async function upsertDiscovered(biz: DiscoveredBusiness): Promise<UpsertOutcome>
  * came from. New sources never conflict with Google Places: a business seen
  * by two sources is deduped to one lead, keeping whichever arrived first.
  */
-export async function upsertIncomingLead(incoming: IncomingLead): Promise<UpsertOutcome> {
+export async function upsertIncomingLead(
+  incoming: IncomingLead,
+  country: string = DEFAULT_COUNTRY,
+): Promise<UpsertOutcome> {
   const nameNorm = normalizeBusinessName(incoming.businessName);
   const instagram = incoming.instagramUsername?.replace(/^@/, "").trim().toLowerCase();
 
@@ -348,7 +354,7 @@ export async function upsertIncomingLead(incoming: IncomingLead): Promise<Upsert
     rating: incoming.rating,
     userRatingCount: incoming.userRatingCount,
     phone: incoming.phone,
-    phoneNormalized: incoming.phone ? normalizeNigerianPhone(incoming.phone) ?? undefined : undefined,
+    phoneNormalized: incoming.phone ? normalizePhone(incoming.phone, country) ?? undefined : undefined,
     email: incoming.email?.toLowerCase(),
     instagramUsername: instagram,
     instagramUrl: instagram ? `https://instagram.com/${instagram}` : undefined,
@@ -443,7 +449,7 @@ export async function processLead(lead: LeadDocument, pitches?: PitchGroupCache)
   lead.pipelineStage = "CHECKED";
 
   // 2) Enrichment (contacts with provenance)
-  await enrichLead(lead);
+  await enrichLead(lead, undefined, settings.defaultCountry);
   lead.pipelineStage = "ENRICHED";
 
   // Re-check suppression now that we know email/phone/instagram.

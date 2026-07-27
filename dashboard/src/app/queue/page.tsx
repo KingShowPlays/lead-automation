@@ -51,7 +51,14 @@ export default function QueuePage() {
         stage: "PENDING_APPROVAL,APPROVED",
         sort: "-priority",
         limit: 100,
-        channel: channel === "ALL" ? undefined : channel,
+        /*
+         * "All" means every lead that can actually be contacted. The queue is a
+         * work list, and a lead with no email, no handle and no mobile number is
+         * not work: it is research. Those are still one click away under "No
+         * route", so nothing is hidden, it is just not mixed in with the leads
+         * you can act on.
+         */
+        channel: channel === "ALL" ? "EMAIL,INSTAGRAM_MANUAL,WHATSAPP" : channel,
       }),
       api.stats().catch(() => null),
     ])
@@ -98,10 +105,12 @@ export default function QueuePage() {
 
   const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(leads?.map((lead) => lead._id) ?? []));
 
+  // "All" counts what All shows: the reachable ones. Including the no-route
+  // leads here would make the number disagree with the list underneath it.
   const countFor = (id: ChannelFilter) =>
     id === "ALL"
       ? counts
-        ? Object.values(counts).reduce((sum, value) => sum + value, 0)
+        ? (counts.EMAIL ?? 0) + (counts.INSTAGRAM_MANUAL ?? 0) + (counts.WHATSAPP ?? 0)
         : null
       : (counts?.[id] ?? (counts ? 0 : null));
 

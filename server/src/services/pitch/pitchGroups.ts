@@ -73,7 +73,7 @@ Because the message is reused, write it with two placeholders:
 - ${BUSINESS_TOKEN} wherever the business name belongs
 - ${CITY_TOKEN} wherever the city belongs
 
-${BUSINESS_TOKEN} must appear at least once, in the greeting. Use ${CITY_TOKEN} at least once. Invent no other placeholders and no other business-specific facts: everything else in the message must be true of every business in this situation.
+The message must open with a greeting naming the business, "Hello ${BUSINESS_TOKEN}," on its own line, followed by a blank line. Use ${CITY_TOKEN} at least once. Invent no other placeholders and no other business-specific facts: everything else in the message must be true of every business in this situation.
 
 ${styleRules}
 - The observation must be about the SITUATION, since you have not seen any individual business.

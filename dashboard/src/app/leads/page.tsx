@@ -28,6 +28,7 @@ import {
   optionLabel,
 } from "@/lib/enums";
 import type { Lead } from "@/lib/types";
+import { whatsappNumber } from "@/lib/contacts";
 import {
   IntelligenceScores,
   MaturityBadge,
@@ -366,7 +367,25 @@ function LeadsPageInner() {
       {error && <div className="mt-6 border-l-4 border-rose-500 bg-rose-500/5 p-4 text-sm text-rose-600">{error}</div>}
 
       <div className={`desktop-table table-shell transition-opacity ${loading && data ? "opacity-60" : ""}`} aria-busy={loading}>
-        <table className="data-table min-w-[1080px]">
+        {/*
+          A fixed column model, not automatic widths.
+          Left to itself the browser sizes columns from their content, so a page
+          of DISCOVERED leads, which have no score, no classification and no
+          contact yet, collapsed five columns to nothing and squeezed the
+          business name into what was left. The widths below are the same
+          whatever the rows happen to contain; only the business column takes
+          the slack.
+        */}
+        <table className="data-table data-table-fixed min-w-[1340px]">
+          <colgroup>
+            <col style={{ width: "180px" }} />
+            <col />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "168px" }} />
+            <col style={{ width: "224px" }} />
+            <col style={{ width: "168px" }} />
+            <col style={{ width: "68px" }} />
+          </colgroup>
           <thead>
             <tr>
               <th>Priority</th>
@@ -384,12 +403,18 @@ function LeadsPageInner() {
               <tr key={lead._id}>
                 <td><IntelligenceScores compact priority={lead.priorityScore} need={lead.needScore ?? lead.leadScore} reach={lead.reachScore} /></td>
                 <td>
-                  <Link href={`/leads/${lead._id}`} className="font-bold text-slate-800 hover:text-brand-600 dark:text-slate-100">{lead.businessName}</Link>
-                  <p className="mt-1 max-w-60 truncate text-xs capitalize text-slate-400">{lead.category} · {lead.city}</p>
+                  <Link href={`/leads/${lead._id}`} className="block truncate font-bold text-slate-800 hover:text-brand-600 dark:text-slate-100">{lead.businessName}</Link>
+                  <p className="mt-1 truncate text-xs capitalize text-slate-400">{lead.category} · {lead.city}</p>
                   <div className="mt-2"><SourceBadge source={lead.discoverySource} /></div>
                 </td>
                 <td>
-                  <WebsiteTypeBadge type={lead.websiteType} />
+                  {/* An unchecked lead has no classification yet. Saying so is
+                      more use than an empty cell that looks like a fault. */}
+                  {lead.websiteCheck || lead.websiteType !== "NO_WEBSITE" || lead.pipelineStage !== "DISCOVERED" ? (
+                    <WebsiteTypeBadge type={lead.websiteType} />
+                  ) : (
+                    <span className="status-badge text-slate-400">Not checked yet</span>
+                  )}
                   <p className="mt-1 text-[11px] text-slate-400">
                     {lead.rating != null ? `${lead.rating.toFixed(1)}★` : "No rating"} · {lead.userRatingCount ?? 0} reviews
                   </p>
@@ -400,8 +425,8 @@ function LeadsPageInner() {
                     {lead.openingSoon ? "Opening soon" : (lead.ratingVelocity ?? 0) >= 2 ? `+${lead.ratingVelocity?.toFixed(1)} reviews/week` : "No rising signal"}
                   </p>
                 </td>
-                <td className="max-w-56 text-xs text-slate-500 dark:text-slate-400">
-                  {lead.email ? <p className="truncate">{lead.email}</p> : lead.whatsappAvailable && lead.phoneNormalized ? <p>{lead.phoneNormalized} · WhatsApp</p> : lead.instagramUsername ? <p>@{lead.instagramUsername}</p> : lead.phoneNormalized ? <p>{lead.phoneNormalized}</p> : <p className="text-rose-400">Needs contact research</p>}
+                <td className="text-xs text-slate-500 dark:text-slate-400">
+                  <BestContact lead={lead} />
                 </td>
                 <td><StagePill stage={lead.pipelineStage} /></td>
                 <td className="text-right">
@@ -474,6 +499,25 @@ function LeadsPageInner() {
       )}
     </div>
   );
+}
+
+/**
+ * The one contact worth showing in a table cell, chosen the same way outreach
+ * chooses a channel, so the column and the queue never disagree.
+ */
+function BestContact({ lead }: { lead: Lead }) {
+  const wa = whatsappNumber(lead);
+  if (lead.email) return <p className="truncate" title={lead.email}>{lead.email}</p>;
+  if (lead.instagramUsername) return <p className="truncate">@{lead.instagramUsername}</p>;
+  if (wa) {
+    return (
+      <p className="truncate">
+        {wa} <span className="text-slate-400">· WhatsApp</span>
+      </p>
+    );
+  }
+  if (lead.phone || lead.phoneNormalized) return <p className="truncate">{lead.phoneNormalized ?? lead.phone}</p>;
+  return <p className="truncate text-rose-400">Needs contact research</p>;
 }
 
 function QuickFilter({ label, onClick }: { label: string; onClick: () => void }) {

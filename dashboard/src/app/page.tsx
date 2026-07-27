@@ -521,6 +521,38 @@ export default function OverviewPage() {
 
       {operations?.activeJob && <PipelineProgress job={operations.activeJob} />}
 
+      {/*
+        A scan that ended badly has to say so on the page, not only in a toast
+        that has already gone. Reloading used to show nothing at all, which
+        reads as "everything is fine" when it is not.
+      */}
+      {!operations?.activeJob &&
+        (operations?.latestJob?.status === "FAILED" || operations?.latestJob?.status === "PARTIAL") && (
+          <section className="panel accent-cta mt-6 border-t-4" role="status">
+            <div className="section-heading">
+              <div className="min-w-0">
+                <h2 className="section-title">
+                  {operations.latestJob.status === "FAILED" ? "The last scan did not finish" : "The last scan finished with problems"}
+                </h2>
+                <p className="section-description break-words">
+                  {operations.latestJob.error ?? operations.latestJob.progress.message}
+                </p>
+              </div>
+              <RiErrorWarningLine className="h-5 w-5 shrink-0 text-cta-500" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+              <ProgressValue label="Found" value={operations.latestJob.progress.found} />
+              <ProgressValue label="Created" value={operations.latestJob.progress.created} />
+              <ProgressValue label="Processed" value={operations.latestJob.progress.processed} />
+              <ProgressValue label="Qualified" value={operations.latestJob.progress.qualified} />
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Nothing found so far was lost. Use the actions above to retry the searches that failed, or to finish
+              processing the leads that were already found.
+            </p>
+          </section>
+        )}
+
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-12">
         {visibleSections.map((id) => (
           <Reveal key={id} className={`min-w-0 ${SPAN_CLASS[SECTION_SPAN[id] ?? 12] ?? "xl:col-span-12"}`}>

@@ -13,24 +13,69 @@ import type { Lead } from "./types";
 
 export type ContactRoute = "EMAIL" | "INSTAGRAM" | "WHATSAPP" | "PHONE";
 
-/** Nigerian mobile prefixes, in the +234 form the pipeline stores. */
-const NG_MOBILE = /^(70|701|702|703|704|705|706|707|708|709|71|80|801|802|803|804|805|806|807|808|809|81|810|811|812|813|814|815|816|817|818|819|90|901|902|903|904|905|906|907|908|909|91|911|912|913|914|915|916|917|918)/;
+/** The countries the server knows how to read a national phone number for. */
+export const COUNTRIES = [
+  { iso: "NG", name: "Nigeria", dial: "234" },
+  { iso: "GH", name: "Ghana", dial: "233" },
+  { iso: "KE", name: "Kenya", dial: "254" },
+  { iso: "ZA", name: "South Africa", dial: "27" },
+  { iso: "EG", name: "Egypt", dial: "20" },
+  { iso: "GB", name: "United Kingdom", dial: "44" },
+  { iso: "US", name: "United States", dial: "1" },
+  { iso: "CA", name: "Canada", dial: "1" },
+  { iso: "IN", name: "India", dial: "91" },
+  { iso: "AE", name: "United Arab Emirates", dial: "971" },
+  { iso: "FR", name: "France", dial: "33" },
+  { iso: "DE", name: "Germany", dial: "49" },
+] as const;
 
+/**
+ * Mobile prefixes per dial code, longest dial code first so +234 is matched
+ * before +23 would be. Mirrors the server's table; the two agree on which
+ * numbers can be offered as WhatsApp contacts.
+ *
+ * North America is deliberately absent: the same ranges carry landlines and
+ * mobiles there, so a +1 number cannot be classified and is shown as a phone
+ * contact rather than claimed as a WhatsApp one.
+ */
+const MOBILE_BY_DIAL: Array<[string, RegExp]> = [
+  ["971", /^5/],
+  ["234", /^(70|80|81|90|91)/],
+  ["233", /^(2|5)/],
+  ["254", /^(7|1)/],
+  ["91", /^[6-9]/],
+  ["49", /^1[5-7]/],
+  ["44", /^7/],
+  ["33", /^[67]/],
+  ["27", /^(6|7|8)/],
+  ["20", /^1/],
+];
+
+/**
+ * The number as stored, or as close as we can get without knowing the country.
+ * The pipeline writes E.164, so anything that already starts with a plus is
+ * taken as authoritative and left alone.
+ */
 function normalise(phone: string | undefined | null): string | null {
   if (!phone) return null;
   const digits = phone.replace(/[^\d+]/g, "");
-  if (digits.startsWith("+234")) return digits;
-  if (digits.startsWith("234")) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length >= 11) return `+234${digits.slice(1)}`;
+  if (digits.startsWith("+")) return digits;
+  if (digits.startsWith("00")) return `+${digits.slice(2)}`;
   return null;
 }
 
-/** A Nigerian mobile number is a WhatsApp number in all but a few cases. */
+/** The number to open WhatsApp with, when the number looks like a mobile. */
 export function whatsappNumber(lead: Pick<Lead, "phone" | "phoneNormalized" | "whatsappAvailable">): string | null {
   const number = lead.phoneNormalized ?? normalise(lead.phone);
-  if (!number) return null;
+  if (!number || !number.startsWith("+")) return null;
+  // The server already decided, and it knows the country the scan ran in.
   if (lead.whatsappAvailable) return number;
-  return NG_MOBILE.test(number.slice(4)) ? number : null;
+
+  const digits = number.slice(1);
+  for (const [dial, mobile] of MOBILE_BY_DIAL) {
+    if (digits.startsWith(dial)) return mobile.test(digits.slice(dial.length)) ? number : null;
+  }
+  return null;
 }
 
 export function contactRoutes(lead: Lead): ContactRoute[] {

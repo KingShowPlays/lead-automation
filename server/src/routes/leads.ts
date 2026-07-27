@@ -11,7 +11,7 @@ import { scoreLead } from "../services/scoring/leadScore.js";
 import { optOutLead } from "../services/suppression.js";
 import { createDraftForLead, emailsSentToday, getActiveEmail, sendPitchForLead } from "../services/outreach/email/index.js";
 import { assignChannel } from "../services/outreach/channel.js";
-import { normalizeNigerianPhone } from "../utils/phone.js";
+import { normalizePhone } from "../utils/phone.js";
 
 export const leadsRouter = Router();
 
@@ -63,7 +63,9 @@ leadsRouter.get(
     if (q.websiteType) filter.websiteType = { $in: q.websiteType.split(",") };
     if (q.city) filter.city = q.city;
     if (q.category) filter.category = q.category;
-    if (q.channel) filter.outreachChannel = q.channel;
+    // Comma separated, so the approval queue can ask for "anything reachable"
+    // in one request rather than three.
+    if (q.channel) filter.outreachChannel = { $in: q.channel.split(",") };
     if (q.minScore != null || q.maxScore != null) {
       const scoreRange = {
         ...(q.minScore != null ? { $gte: q.minScore } : {}),
@@ -237,7 +239,7 @@ leadsRouter.patch(
     Object.assign(lead, body);
 
     if (body.phone !== undefined) {
-      lead.phoneNormalized = normalizeNigerianPhone(body.phone) ?? undefined;
+      lead.phoneNormalized = normalizePhone(body.phone, (await getSettings()).defaultCountry) ?? undefined;
     }
     if (body.instagramUsername) {
       lead.instagramUrl = `https://instagram.com/${body.instagramUsername.replace(/^@/, "")}`;

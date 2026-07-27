@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyMobile, normalizeNigerianPhone, phoneFromWhatsAppLink } from "../src/utils/phone.js";
+import { isLikelyMobile, normalizeNigerianPhone, normalizePhone, phoneFromWhatsAppLink } from "../src/utils/phone.js";
 
 describe("normalizeNigerianPhone", () => {
   it("normalizes local format with leading 0", () => {
@@ -63,9 +63,50 @@ describe("isLikelyMobile", () => {
     expect(isLikelyMobile("+2341234567890")).toBe(false);
   });
 
-  it("rejects non-NG numbers", () => {
+  it("does not claim a number it cannot classify", () => {
+    // North America has no mobile prefix, so a +1 number cannot be told apart
+    // from a landline and is not advertised as a WhatsApp contact.
     expect(isLikelyMobile("+14155551234")).toBe(false);
     expect(isLikelyMobile(null)).toBe(false);
+  });
+
+  it("recognises mobiles in other countries it knows", () => {
+    expect(isLikelyMobile("+233241234567")).toBe(true); // Ghana
+    expect(isLikelyMobile("+254712345678")).toBe(true); // Kenya
+    expect(isLikelyMobile("+447700900123")).toBe(true); // United Kingdom
+    expect(isLikelyMobile("+27821234567")).toBe(true); // South Africa
+  });
+});
+
+describe("numbers from outside the home country", () => {
+  it("keeps the country the number states, whatever the default is", () => {
+    // The old normaliser stripped whatever code it found and stamped +234 on
+    // the result, so a Ghanaian number came back wrong or, more often, null.
+    expect(normalizePhone("+233 24 123 4567", "NG")).toBe("+233241234567");
+    expect(normalizePhone("+44 7700 900123", "NG")).toBe("+447700900123");
+    expect(normalizePhone("00254 712 345678", "NG")).toBe("+254712345678");
+  });
+
+  it("reads a national number as the country the search is running in", () => {
+    expect(normalizePhone("0803 123 4567", "NG")).toBe("+2348031234567");
+    expect(normalizePhone("024 123 4567", "GH")).toBe("+233241234567");
+    expect(normalizePhone("082 123 4567", "ZA")).toBe("+27821234567");
+  });
+
+  it("keeps a well-formed number from a country it does not know", () => {
+    // Storing a number this build cannot classify is better than deleting a
+    // real way to reach somebody.
+    expect(normalizePhone("+352 621 123 456", "NG")).toBe("+352621123456");
+  });
+
+  it("still rejects anything that is not a phone number", () => {
+    expect(normalizePhone("+12", "NG")).toBeNull();
+    expect(normalizePhone("abc", "NG")).toBeNull();
+    expect(normalizePhone("080312345", "NG")).toBeNull();
+  });
+
+  it("reads a wa.me number as international even without a plus", () => {
+    expect(phoneFromWhatsAppLink("https://wa.me/233241234567")).toBe("+233241234567");
   });
 });
 

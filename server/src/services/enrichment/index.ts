@@ -1,5 +1,5 @@
 import { logger } from "../../utils/logger.js";
-import { normalizeNigerianPhone, isLikelyMobile } from "../../utils/phone.js";
+import { DEFAULT_COUNTRY, isLikelyMobile, normalizePhone } from "../../utils/phone.js";
 import { extractContactsFromHtml, mergeContacts } from "./contactExtractor.js";
 import { pickBestEmail } from "./emailQuality.js";
 import { extractDomain } from "../../utils/url.js";
@@ -41,10 +41,14 @@ async function fetchHtml(url: string, timeoutMs = 12000): Promise<string | null>
  *    (homepage + a contact page if one is linked + link-in-bio page).
  * Every collected value gets a provenance entry in lead.contactSources.
  */
-export async function enrichLead(lead: LeadDocument, homepageHtml?: string | null): Promise<void> {
+export async function enrichLead(
+  lead: LeadDocument,
+  homepageHtml?: string | null,
+  country: string = DEFAULT_COUNTRY,
+): Promise<void> {
   // ---- Phone from Places ----
   if (lead.phone) {
-    const normalized = lead.phoneNormalized ?? normalizeNigerianPhone(lead.phone);
+    const normalized = lead.phoneNormalized ?? normalizePhone(lead.phone, country);
     if (normalized) {
       // The WhatsApp flag is set from the number every time, not only the first
       // time the number is normalised. Discovery already normalises Places
@@ -70,7 +74,7 @@ export async function enrichLead(lead: LeadDocument, homepageHtml?: string | nul
   if (pageUrl) {
     const html = homepageHtml ?? (await fetchHtml(pageUrl));
     if (html) {
-      contacts = extractContactsFromHtml(html, pageUrl);
+      contacts = extractContactsFromHtml(html, pageUrl, country);
 
       // Follow one contact/about page if linked (common place for emails).
       const contactHref = html.match(/href=["']([^"']*(?:contact|about)[^"']*)["']/i)?.[1];
@@ -80,7 +84,7 @@ export async function enrichLead(lead: LeadDocument, homepageHtml?: string | nul
           if (contactUrl !== pageUrl) {
             const contactHtml = await fetchHtml(contactUrl, 8000);
             if (contactHtml) {
-              contacts = mergeContacts(contacts, extractContactsFromHtml(contactHtml, contactUrl));
+              contacts = mergeContacts(contacts, extractContactsFromHtml(contactHtml, contactUrl, country));
             }
           }
         } catch {

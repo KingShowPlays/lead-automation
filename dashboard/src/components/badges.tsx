@@ -63,15 +63,15 @@ export function IntelligenceScores({
         className={`flex min-w-12 flex-col items-center justify-center px-2 py-1.5 font-heading font-extrabold tabular-nums ${priorityClass}`}
         title="Priority blends business need (75%) and contact reach (25%)"
       >
-        <span className="text-[8px] uppercase tracking-wider opacity-80">Priority</span>
+        <span className="whitespace-nowrap text-[8px] uppercase tracking-wider opacity-80">Priority</span>
         <span className={compact ? "text-sm" : "text-base"}>{resolvedPriority}</span>
       </span>
       <span className="flex min-w-11 flex-col items-center justify-center bg-white px-2 py-1 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-        <span className="text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Need</span>
+        <span className="whitespace-nowrap text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Need</span>
         <strong className="font-heading tabular-nums">{resolvedNeed}</strong>
       </span>
       <span className="flex min-w-11 flex-col items-center justify-center border-l border-slate-300 bg-white px-2 py-1 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-        <span className="text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Reach</span>
+        <span className="whitespace-nowrap text-[8px] font-extrabold uppercase tracking-wider text-slate-400">Reach</span>
         <strong className="font-heading tabular-nums">{resolvedReach}</strong>
       </span>
     </div>

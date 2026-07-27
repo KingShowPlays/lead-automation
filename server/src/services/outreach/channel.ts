@@ -1,4 +1,4 @@
-import { isLikelyMobile, normalizeNigerianPhone } from "../../utils/phone.js";
+import { DEFAULT_COUNTRY, isLikelyMobile, normalizePhone } from "../../utils/phone.js";
 import type { LeadDocument } from "../../models/Lead.js";
 import type { OutreachChannel } from "../../types.js";
 
@@ -23,7 +23,9 @@ interface ContactRoutes {
  */
 export function whatsappReachable(lead: ContactRoutes): boolean {
   if (lead.whatsappAvailable) return Boolean(lead.phoneNormalized ?? lead.phone);
-  const normalized = lead.phoneNormalized ?? (lead.phone ? normalizeNigerianPhone(lead.phone) : null);
+  // phoneNormalized is written at discovery with the configured country;
+  // this fallback only covers a lead stored before that ran.
+  const normalized = lead.phoneNormalized ?? (lead.phone ? normalizePhone(lead.phone, DEFAULT_COUNTRY) : null);
   return isLikelyMobile(normalized);
 }
 
