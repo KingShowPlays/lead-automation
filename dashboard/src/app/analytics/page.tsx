@@ -42,7 +42,8 @@ export default function AnalyticsPage() {
     }
   }, [days]);
 
-  useLiveData(() => void load(), 30000);
+  const refresh = useCallback(() => void load(), [load]);
+  useLiveData(refresh, 30000);
 
   const derived = useMemo(() => {
     if (!stats) return null;

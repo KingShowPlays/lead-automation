@@ -39,12 +39,27 @@ export function useLiveData(load: () => void, intervalMs = 20000): void {
   const saved = useRef(load);
   saved.current = load;
 
+  /*
+   * Fetch again when the parameters change, not only on the interval.
+   *
+   * The effect below is keyed on the interval alone, so a view that changed
+   * what it was asking for, a different channel in the approval queue, a
+   * different window on analytics, kept the new callback in the ref and never
+   * called it. The change then appeared whenever the next poll happened to come
+   * round: up to twenty seconds of a filter looking like it had been ignored.
+   *
+   * Callers must pass a callback whose identity only changes when the request
+   * does, which is what useCallback with the parameters as dependencies gives.
+   */
+  useEffect(() => {
+    if (!document.hidden) load();
+  }, [load]);
+
   useEffect(() => {
     const run = () => {
       if (!document.hidden) saved.current();
     };
 
-    run();
 
     const onChanged = () => saved.current();
     const onVisible = () => run();

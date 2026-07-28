@@ -167,7 +167,7 @@ export interface Stats {
   };
 }
 
-export type PipelineJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+export type PipelineJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED" | "CANCELLED";
 
 export interface PipelineJob {
   _id: string;
@@ -188,12 +188,16 @@ export interface PipelineJob {
     failedQueries: number;
     processed: number;
     qualified: number;
+    duplicates: number;
+    suppressed: number;
     processingErrors: number;
     aiFallbacks: number;
   };
   error?: string;
   /** Set once the operator has dismissed the report of a run that went wrong. */
   acknowledgedAt?: string;
+  /** When a counter last moved. Silence here, not in the heartbeat, means wedged. */
+  progressAt?: string;
 }
 
 export interface PipelineOperationalStatus {

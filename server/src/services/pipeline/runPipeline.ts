@@ -565,6 +565,15 @@ export interface ProcessingProgress {
   message?: string;
 }
 
+/**
+ * How often a running batch may write its progress.
+ *
+ * Every lead completing is a write otherwise, and a batch is two hundred of
+ * them across a handful of workers. A second is far below what a person can
+ * see and far above what the database should be asked to absorb.
+ */
+const PROGRESS_REPORT_MS = 1_000;
+
 export interface ProcessOptions {
   onProgress?: (progress: ProcessingProgress) => void | Promise<void>;
 }
@@ -617,16 +626,55 @@ async function processPendingLeadsUnlocked(
       .limit(batchSize);
     if (pending.length === 0) break;
 
-    const outcomes = await mapWithConcurrency(pending, checker.concurrency, async (lead) => processLead(lead, pitches));
+    /*
+     * Report as each lead lands, not once the batch of two hundred is done.
+     *
+     * A website check waits up to eight seconds and a handful run at once, so a
+     * full batch is minutes of work. Reporting only at the end meant the
+     * progress bar sat at the same number for those minutes and then jumped,
+     * which reads as frozen rather than as busy. Throttled, because the point is
+     * a bar that moves, not a write per lead.
+     */
+    const startedAt = result.processed + result.errors.length;
+    let done = 0;
+    let lastReport = 0;
+    const report = async (force = false) => {
+      if (!options.onProgress) return;
+      const now = Date.now();
+      if (!force && now - lastReport < PROGRESS_REPORT_MS) return;
+      lastReport = now;
+      await Promise.resolve(
+        options.onProgress({
+          current: startedAt + done,
+          total,
+          processed: result.processed,
+          qualified: result.qualified,
+          errors: result.errors.length,
+          aiFallbacks: result.aiFallbacks,
+        }),
+      ).catch((err) => logger.warn({ err: String(err) }, "processing progress callback failed"));
+    };
+
+    const outcomes = await mapWithConcurrency(pending, checker.concurrency, async (lead) => {
+      try {
+        // Tallied here rather than after the batch, so the figures on screen
+        // are the figures so far rather than the figures as of last time.
+        const value = await processLead(lead, pitches);
+        result.processed++;
+        if (value.qualified) result.qualified++;
+        else result.disqualified++;
+        if (value.aiFallback) result.aiFallbacks++;
+        return value;
+      } finally {
+        done++;
+        await report();
+      }
+    });
 
     let failedWholeBatch = true;
     outcomes.forEach((o, i) => {
       if (o.ok) {
         failedWholeBatch = false;
-        result.processed++;
-        if (o.value.qualified) result.qualified++;
-        else result.disqualified++;
-        if (o.value.aiFallback) result.aiFallbacks++;
       } else {
         failedIds.push(pending[i]?._id);
         result.errors.push({ lead: pending[i]?.businessName ?? "unknown", error: o.error.message });
@@ -643,18 +691,8 @@ async function processPendingLeadsUnlocked(
       }
     });
 
-    if (options.onProgress) {
-      await Promise.resolve(
-        options.onProgress({
-          current: result.processed + result.errors.length,
-          total,
-          processed: result.processed,
-          qualified: result.qualified,
-          errors: result.errors.length,
-          aiFallbacks: result.aiFallbacks,
-        }),
-      ).catch((err) => logger.warn({ err: String(err) }, "processing progress callback failed"));
-    }
+    // Exact figures at the end of the batch, whatever the throttle skipped.
+    await report(true);
 
     // A lead whose processing throws stays in DISCOVERED; if literally every
     // lead in a batch failed (DB down, etc.), stop instead of spinning.

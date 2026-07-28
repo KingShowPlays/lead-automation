@@ -13,6 +13,7 @@ import {
   RiCheckboxCircleFill,
   RiCloseCircleFill,
   RiCloseLine,
+  RiStopCircleLine,
   RiErrorWarningLine,
   RiArrowRightLine,
   RiTimeLine,
@@ -55,6 +56,7 @@ export default function OverviewPage() {
   const [operations, setOperations] = useState<PipelineOperationalStatus | null>(null);
   const [starting, setStarting] = useState<PipelineJob["type"] | null>(null);
   const [dismissing, setDismissing] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const previousActiveJob = useRef<string | null>(null);
   const operationsReady = useRef(false);
 
@@ -143,6 +145,29 @@ export default function OverviewPage() {
       toast.error(err instanceof Error ? err.message : "Could not dismiss the report");
     } finally {
       setDismissing(false);
+    }
+  }
+
+  /**
+   * Stops a run that is going nowhere.
+   *
+   * The server releases the lock whether or not the run notices, so the next
+   * scan can start immediately. Waiting for a request that never returns is
+   * exactly the case this exists for.
+   */
+  async function stopScan() {
+    const job = operations?.activeJob;
+    if (!job) return;
+    setStopping(true);
+    try {
+      await api.cancelJob(job._id);
+      toast.success("Scan stopped. Everything it had already found was kept.");
+      await loadOperations();
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not stop the scan");
+    } finally {
+      setStopping(false);
     }
   }
 
@@ -546,7 +571,9 @@ export default function OverviewPage() {
         </div>
       </header>
 
-      {operations?.activeJob && <PipelineProgress job={operations.activeJob} />}
+      {operations?.activeJob && (
+        <PipelineProgress job={operations.activeJob} onStop={stopScan} stopping={stopping} />
+      )}
 
       {/*
         A scan that ended badly has to say so on the page, not only in a toast
@@ -597,6 +624,33 @@ function ScanReport({
     : { accent: "accent-cta", ink: "text-amber-600 dark:text-amber-400", fill: "bg-amber-500" };
 
   const kept = job.progress.created > 0 || job.progress.qualified > 0;
+  const alreadyKnown = Math.max(0, job.progress.found - job.progress.created);
+
+  /*
+   * The specific reasons, in the operator's terms.
+   *
+   * "Completed with recoverable errors" is not a thing anyone can act on. Each
+   * line below names what happened and what it means for the work, because
+   * these have genuinely different answers: failed searches are resumable,
+   * failed leads retry on the next run, and a templated pitch is already sitting
+   * in the queue ready to send.
+   */
+  const reasons: string[] = [];
+  if (job.progress.failedQueries > 0) {
+    reasons.push(
+      `${job.progress.failedQueries.toLocaleString()} ${job.progress.failedQueries === 1 ? "search" : "searches"} did not complete. Resume picks up exactly those, and skips the ones that worked.`,
+    );
+  }
+  if (job.progress.processingErrors > 0) {
+    reasons.push(
+      `${job.progress.processingErrors.toLocaleString()} ${job.progress.processingErrors === 1 ? "business" : "businesses"} could not be checked and scored. They stay in the queue and are retried on the next run.`,
+    );
+  }
+  if (job.progress.aiFallbacks > 0) {
+    reasons.push(
+      `${job.progress.aiFallbacks.toLocaleString()} ${job.progress.aiFallbacks === 1 ? "message was" : "messages were"} written from the built-in template because the AI writer was unavailable. Those leads are ready to send; regenerate any of them from the queue.`,
+    );
+  }
 
   return (
     <section className={`panel ${tone.accent} mt-6 border-t-4`} role="status">
@@ -631,10 +685,37 @@ function ScanReport({
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <ProgressValue label="Found" value={job.progress.found} />
-        <ProgressValue label="Created" value={job.progress.created} />
+        <ProgressValue label="New" value={job.progress.created} />
         <ProgressValue label="Processed" value={job.progress.processed} />
         <ProgressValue label="Qualified" value={job.progress.qualified} />
       </div>
+
+      {/*
+        Found minus new is not a loss, and saying nothing about it made the
+        figures look wrong: 735 found against 356 new reads like a fault until
+        it says the rest were businesses already on file.
+      */}
+      {alreadyKnown > 0 && (
+        <p className="mt-2 text-xs text-slate-400">
+          {alreadyKnown.toLocaleString()} of the {job.progress.found.toLocaleString()} found{" "}
+          {alreadyKnown === 1 ? "was" : "were"} already on file
+          {job.progress.suppressed > 0 && ` or on the do-not-contact list`}, so only the new ones were added.
+        </p>
+      )}
+
+      {/* What actually went wrong, itemised, instead of "recoverable errors". */}
+      {reasons.length > 0 && (
+        <ul className="mt-4 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {reasons.map((reason) => (
+            <li key={reason} className="flex gap-2">
+              <span aria-hidden className={tone.ink}>
+                •
+              </span>
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <p className="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
         {kept
@@ -645,7 +726,32 @@ function ScanReport({
   );
 }
 
-function PipelineProgress({ job }: { job: PipelineJob }) {
+/**
+ * How long ago something happened, in words, refreshed every second.
+ *
+ * The point is the "ago", not the timestamp: a run whose counters last moved
+ * four minutes ago is the thing worth noticing, and a fixed clock time makes
+ * the reader do that subtraction themselves.
+ */
+function useSecondsSince(iso?: string): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!iso) return null;
+  return Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+}
+
+function PipelineProgress({
+  job,
+  onStop,
+  stopping,
+}: {
+  job: PipelineJob;
+  onStop: () => void;
+  stopping: boolean;
+}) {
   const total = Math.max(job.progress.total, 1);
   const percent = Math.min(100, Math.round((job.progress.current / total) * 100));
   const phase =
@@ -655,17 +761,45 @@ function PipelineProgress({ job }: { job: PipelineJob }) {
         ? "Auditing and scoring leads"
         : "Preparing pipeline";
 
+  /*
+   * Say when the counters last moved.
+   *
+   * A spinner means "something is happening" whether or not anything is, which
+   * is how a wedged run held this page for most of a day looking busy. The
+   * elapsed time is the honest version, and after a couple of minutes of
+   * nothing it says so outright rather than leaving it to be inferred.
+   */
+  const idle = useSecondsSince(job.progressAt);
+  const stalling = idle !== null && idle >= 120;
+
   return (
     <section className="panel accent-purple mt-6 overflow-hidden border-t-4" aria-live="polite">
-      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="loader-spinner h-4 w-4 shrink-0 border-2 border-purple-200 border-t-purple-600" />
             <p className="font-heading text-sm font-extrabold text-slate-800 dark:text-white">{phase}</p>
           </div>
           <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">{job.progress.message}</p>
+          {idle !== null && (
+            <p className={`mt-1 text-xs ${stalling ? "font-semibold text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+              {stalling
+                ? `No progress for ${formatDuration(idle)}. It may be stuck; you can stop it and keep what it found.`
+                : `Last moved ${formatDuration(idle)} ago`}
+            </p>
+          )}
         </div>
-        <p className="shrink-0 font-heading text-2xl font-extrabold tabular-nums text-purple-600">{percent}%</p>
+        <div className="flex shrink-0 items-center gap-3">
+          <p className="font-heading text-2xl font-extrabold tabular-nums text-purple-600">{percent}%</p>
+          <button type="button" onClick={onStop} disabled={stopping} className="btn-ghost" aria-label="Stop this scan">
+            {stopping ? (
+              <span className="loader-spinner h-4 w-4 border-2 border-slate-300 border-t-slate-600" />
+            ) : (
+              <RiStopCircleLine className="h-4 w-4" />
+            )}
+            Stop
+          </button>
+        </div>
       </div>
       <div className="mt-4 h-3 overflow-hidden border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30">
         <div className="h-full bg-purple-600 transition-[width] duration-500" style={{ width: `${percent}%` }} />
@@ -695,6 +829,15 @@ function PipelineProgress({ job }: { job: PipelineJob }) {
       )}
     </section>
   );
+}
+
+/** Elapsed seconds as something readable, without a formatting library. */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
 }
 
 function ProgressValue({ label, value }: { label: string; value: number }) {

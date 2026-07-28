@@ -203,6 +203,9 @@ export const api = {
 
   pipelineJob: (id: string) => req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}`),
 
+  cancelJob: (id: string) =>
+    req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}/cancel`, { method: "POST", body: "{}" }),
+
   acknowledgeJob: (id: string) =>
     req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}/acknowledge`, { method: "POST", body: "{}" }),
 

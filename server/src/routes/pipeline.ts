@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { SearchRun } from "../models/SearchRun.js";
 import { PipelineJob } from "../models/PipelineJob.js";
+import { PipelineLease } from "../models/PipelineLease.js";
 import { asyncHandler, validateBody } from "../middleware/index.js";
 import { discover, processPendingLeads, runFullPipeline } from "../services/pipeline/runPipeline.js";
 import {
@@ -83,6 +84,44 @@ pipelineRouter.get(
   "/jobs/status",
   asyncHandler(async (_req, res) => {
     res.json(await getPipelineOperationalStatus());
+  }),
+);
+
+/**
+ * POST /api/pipeline/jobs/:id/cancel, stop a run that is going nowhere.
+ *
+ * Two things happen, because either alone is not enough. The flag asks the run
+ * to stop, which it notices the next time it reports progress and unwinds
+ * cleanly. The lock is released here regardless, so a run too wedged to notice
+ * cannot go on blocking the next scan: waiting for a hung request to answer is
+ * exactly the situation this exists for.
+ */
+pipelineRouter.post(
+  "/jobs/:id/cancel",
+  asyncHandler(async (req, res) => {
+    const job = await PipelineJob.findById(req.params.id);
+    if (!job) return res.status(404).json({ error: "Pipeline job not found" });
+    if (job.status !== "RUNNING" && job.status !== "QUEUED") {
+      return res.status(409).json({ error: `That scan is already ${job.status.toLowerCase()}.` });
+    }
+
+    await PipelineJob.updateOne(
+      { _id: job._id },
+      {
+        $set: {
+          cancelRequested: true,
+          status: "CANCELLED",
+          phase: "COMPLETE",
+          finishedAt: new Date(),
+          "progress.message": "Stopped before it finished",
+        },
+        $unset: { activeKey: 1 },
+      },
+    );
+    await PipelineLease.deleteMany({}).catch(() => undefined);
+
+    const updated = await PipelineJob.findById(job._id);
+    res.json({ job: updated });
   }),
 );
 

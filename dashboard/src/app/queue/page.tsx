@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RiInboxUnarchiveLine,
   RiRefreshLine,
@@ -42,6 +42,16 @@ export default function QueuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  /*
+   * What each filter last showed, kept so flipping back is instant.
+   *
+   * Switching channel used to blank the list to skeletons and refetch, and the
+   * refetch waited on the stats endpoint, which counts the whole collection.
+   * Choosing "Email" therefore took several seconds to show anything at all.
+   * A ref rather than state: writing to it must not itself cause a render.
+   */
+  const cached = useRef<Map<ChannelFilter, { items: Lead[]; total: number }>>(new Map());
+
   const load = useCallback(() => {
     let cancelled = false;
     setRefreshing(true);
@@ -71,6 +81,7 @@ export default function QueuePage() {
       })
       .then((result: { items: Lead[]; total: number }) => {
         if (cancelled) return;
+        cached.current.set(channel, { items: result.items, total: result.total });
         setLeads(result.items);
         setTotal(result.total);
         setError(null);
@@ -82,15 +93,8 @@ export default function QueuePage() {
         if (!cancelled) setError(e.message);
       });
 
-    api
-      .stats()
-      .then((stats: Stats) => {
-        if (!cancelled) setCounts(stats.queueByChannel ?? null);
-      })
-      .catch(() => undefined);
-
-    // Only the queue itself governs the spinner. The tallies filling in a
-    // moment later is not the page still loading.
+    // Only the queue itself governs the spinner. The tallies are fetched
+    // elsewhere and are not what the page is waiting for.
     queue.finally(() => {
       if (!cancelled) setRefreshing(false);
     });
@@ -100,7 +104,44 @@ export default function QueuePage() {
     };
   }, [channel]);
 
+  /*
+   * The tallies on the filter buttons are counts of the whole collection, and
+   * they do not change because you looked at a different filter. Fetching them
+   * on the channel-change path put a multi-second request in front of every
+   * flip between All and Email. They are loaded on arrival and refreshed with
+   * the rest of the data instead.
+   */
+  const loadCounts = useCallback(() => {
+    let cancelled = false;
+    api
+      .stats()
+      .then((stats: Stats) => {
+        if (!cancelled) setCounts(stats.queueByChannel ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useLiveData(load, 20000);
+  useLiveData(loadCounts, 60000);
+
+  /*
+   * A selection seen before is shown from the cache while it refreshes, so
+   * going back and forth is instant.
+   *
+   * Only from the cache. Filtering whatever happens to be on screen was the
+   * first attempt and it is worse than doing nothing: once you are already on
+   * Email, filtering those for WhatsApp leaves nothing, so the page flashed an
+   * empty queue before the real answer arrived.
+   */
+  useEffect(() => {
+    const hit = cached.current.get(channel);
+    if (!hit) return;
+    setLeads(hit.items);
+    setTotal(hit.total);
+  }, [channel]);
 
   const remove = (id: string) => {
     setLeads((previous) => previous?.filter((lead) => lead._id !== id) ?? null);

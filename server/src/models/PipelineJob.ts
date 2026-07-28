@@ -1,7 +1,7 @@
 import mongoose, { Schema, type Document, type Model } from "mongoose";
 
 export type PipelineJobType = "FULL" | "DISCOVERY" | "PROCESS" | "RESUME_DISCOVERY";
-export type PipelineJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+export type PipelineJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED" | "CANCELLED";
 export type PipelineJobPhase = "QUEUED" | "DISCOVERY" | "PROCESSING" | "COMPLETE";
 
 export interface PipelineJobDocument extends Document {
@@ -16,12 +16,26 @@ export interface PipelineJobDocument extends Document {
   startedAt?: Date;
   finishedAt?: Date;
   heartbeatAt: Date;
+  /**
+   * When the work last actually moved.
+   *
+   * The heartbeat only proves the process is alive. It is written by a timer,
+   * so a run wedged on a request that never returns keeps beating and never
+   * looks stale: one sat on the overview for most of a day that way. This
+   * advances only when a counter does, which is what "still working" means.
+   */
+  progressAt: Date;
+  /** Set by the operator to stop a run that is going nowhere. */
+  cancelRequested?: boolean;
   progress: {
     current: number;
     total: number;
     message: string;
     found: number;
     created: number;
+    /** Already known, so found but not created. Explains the gap in the report. */
+    duplicates: number;
+    suppressed: number;
     failedQueries: number;
     processed: number;
     qualified: number;
@@ -49,7 +63,7 @@ const pipelineJobSchema = new Schema<PipelineJobDocument>(
     trigger: { type: String, enum: ["CRON", "MANUAL", "API"], default: "API" },
     status: {
       type: String,
-      enum: ["QUEUED", "RUNNING", "COMPLETED", "PARTIAL", "FAILED"],
+      enum: ["QUEUED", "RUNNING", "COMPLETED", "PARTIAL", "FAILED", "CANCELLED"],
       default: "QUEUED",
       index: true,
     },
@@ -64,12 +78,16 @@ const pipelineJobSchema = new Schema<PipelineJobDocument>(
     startedAt: Date,
     finishedAt: Date,
     heartbeatAt: { type: Date, default: Date.now },
+    progressAt: { type: Date, default: Date.now },
+    cancelRequested: { type: Boolean, default: false },
     progress: {
       current: { type: Number, default: 0 },
       total: { type: Number, default: 0 },
       message: { type: String, default: "Queued" },
       found: { type: Number, default: 0 },
       created: { type: Number, default: 0 },
+      duplicates: { type: Number, default: 0 },
+      suppressed: { type: Number, default: 0 },
       failedQueries: { type: Number, default: 0 },
       processed: { type: Number, default: 0 },
       qualified: { type: Number, default: 0 },

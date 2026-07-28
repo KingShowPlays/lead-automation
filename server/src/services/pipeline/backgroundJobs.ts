@@ -35,16 +35,54 @@ function busyError(active?: PipelineJobDocument | null): Error {
   );
 }
 
+/**
+ * Writes progress, and records that the work moved.
+ *
+ * `progressAt` only advances when a counter does. The heartbeat cannot say
+ * that, because it is a timer: it keeps beating while a request hangs, which is
+ * how a run held the overview for most of a day looking perfectly healthy.
+ */
 async function updateJob(jobId: string, set: Record<string, unknown>): Promise<void> {
+  const moved = Object.keys(set).some((key) => key.startsWith("progress.") && key !== "progress.message");
   await PipelineJob.updateOne(
     { _id: jobId, activeKey: "pipeline" },
-    { $set: { ...set, heartbeatAt: new Date() } },
+    { $set: { ...set, heartbeatAt: new Date(), ...(moved ? { progressAt: new Date() } : {}) } },
   );
 }
 
+/** Thrown when the operator stops a run. Not an error to report as a failure. */
+class CancelledError extends Error {
+  constructor() {
+    super("Stopped on request");
+    this.name = "CancelledError";
+  }
+}
+
+/**
+ * Asks the database whether this run has been told to stop.
+ *
+ * Cancelling is cooperative because the work is a loop, not a thread that can
+ * be killed. The endpoint also releases the lock, so even a run too wedged to
+ * notice this cannot keep the next scan from starting.
+ */
+async function assertNotCancelled(jobId: string): Promise<void> {
+  const job = await PipelineJob.findById(jobId).select("cancelRequested").lean();
+  if (job?.cancelRequested) throw new CancelledError();
+}
+
+/**
+ * Whether the run is worth complaining about.
+ *
+ * A search that failed leaves work undone and can be resumed, and a lead that
+ * threw is a lead with no pitch, so both are genuinely partial. A pitch that
+ * fell back to the template is not: the lead came out with a message on it and
+ * is sitting in the queue ready to send. Counting that as a problem put "the
+ * last scan finished with problems" on the overview after runs where nothing
+ * had gone wrong. It is still reported, as a note, in its own right.
+ */
 function finalStatus(discovery?: DiscoverResult, processing?: BatchProcessResult): PipelineJobStatus {
   if (discovery?.status === "PARTIAL" || discovery?.status === "FAILED") return "PARTIAL";
-  if (processing?.errors.length || processing?.aiFallbacks) return "PARTIAL";
+  if (processing?.errors.length) return "PARTIAL";
   return "COMPLETED";
 }
 
@@ -56,6 +94,16 @@ function finalStatus(discovery?: DiscoverResult, processing?: BatchProcessResult
  */
 const JOB_STALE_AFTER_MS = 2 * 60_000;
 const JOB_HEARTBEAT_MS = 15_000;
+
+/*
+ * How long the counters may sit still before the run is presumed wedged.
+ *
+ * Generous, because a single slow batch is normal: a website check waits up to
+ * eight seconds and several run at once. Nothing legitimate goes this long
+ * without moving a counter, and the alternative was a scan that held the
+ * dashboard until somebody noticed the next morning.
+ */
+const JOB_STALLED_AFTER_MS = 12 * 60_000;
 
 async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
   const jobId = String(job._id);
@@ -87,6 +135,8 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
       "progress.message": job.type === "PROCESS" ? "Checking discovered leads" : "Starting discovery",
     });
 
+    // Checked wherever progress is reported, which is the only place the loop
+    // comes up for air often enough to notice.
     const onDiscoveryProgress = async (progress: {
       runId: string;
       current: number;
@@ -108,6 +158,7 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
           ? `Searching ${progress.query.category} in ${progress.query.city}`
           : "Running discovery",
       });
+      await assertNotCancelled(jobId);
     };
 
     const onProcessingProgress = async (progress: {
@@ -129,6 +180,7 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
         "progress.aiFallbacks": progress.aiFallbacks,
         "progress.message": progress.message ?? "Checking websites, scoring leads and preparing pitches",
       });
+      await assertNotCancelled(jobId);
     };
 
     if (job.type === "FULL") {
@@ -162,6 +214,11 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
               : discovery?.totalQueries ?? 0,
           "progress.found": discovery?.found ?? 0,
           "progress.created": discovery?.created ?? 0,
+          // Found minus created is not a loss, and the report said nothing
+          // about where the difference went: 735 found against 356 created
+          // reads like a fault until it says most were already on file.
+          "progress.duplicates": discovery?.duplicates ?? 0,
+          "progress.suppressed": discovery?.suppressed ?? 0,
           "progress.failedQueries": discovery
             ? discovery.failedQueries + discovery.pendingQueries
             : 0,
@@ -178,18 +235,28 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
       },
     );
   } catch (err) {
+    const cancelled = err instanceof CancelledError;
     const message = err instanceof Error ? err.message : String(err);
-    logger.error({ err: message, jobId, type: job.type }, "background pipeline job failed");
+
+    // Stopping on request is an outcome, not a fault. Reporting it as a failure
+    // would put a red panel on the overview for something the operator did on
+    // purpose, which is the sort of thing they then cannot get rid of.
+    if (cancelled) {
+      logger.info({ jobId, type: job.type }, "pipeline job stopped on request");
+    } else {
+      logger.error({ err: message, jobId, type: job.type }, "background pipeline job failed");
+    }
+
     await PipelineJob.updateOne(
       { _id: jobId },
       {
         $set: {
-          status: "FAILED",
+          status: cancelled ? "CANCELLED" : "FAILED",
           phase: "COMPLETE",
-          error: message,
+          ...(cancelled ? {} : { error: message }),
           finishedAt: new Date(),
           heartbeatAt: new Date(),
-          "progress.message": message,
+          "progress.message": cancelled ? "Stopped before it finished" : message,
         },
         $unset: { activeKey: 1 },
       },
@@ -208,10 +275,27 @@ async function executePipelineJob(job: PipelineJobDocument): Promise<void> {
  * service, and no new scan can start because the lock is still taken.
  */
 async function failStaleJob(job: PipelineJobDocument): Promise<boolean> {
+  const now = Date.now();
   const lastBeat = job.heartbeatAt?.getTime() ?? job.startedAt?.getTime() ?? 0;
-  if (Date.now() - lastBeat < JOB_STALE_AFTER_MS) return false;
+  const lastProgress = job.progressAt?.getTime() ?? job.startedAt?.getTime() ?? lastBeat;
 
-  const message = "The scan stopped responding and was ended. Resume it, or process the leads it already found.";
+  const dead = now - lastBeat >= JOB_STALE_AFTER_MS;
+  const wedged = now - lastProgress >= JOB_STALLED_AFTER_MS;
+  if (!dead && !wedged) return false;
+
+  /*
+   * Two different failures, and only one of them used to be caught.
+   *
+   * A gone process stops beating. A wedged one keeps beating from its timer
+   * while the work sits on a request that never returns, so it looked healthy
+   * indefinitely: the overview showed a scan running for most of a day. The
+   * counters are what say the work is moving, so a run whose counters have not
+   * moved in a long time is ended too.
+   */
+  const message = dead
+    ? "The scan stopped responding and was ended. Resume it, or process the leads it already found."
+    : `The scan stopped making progress for ${Math.round(JOB_STALLED_AFTER_MS / 60_000)} minutes and was ended. ` +
+      "Nothing it had already found was lost. Resume it, or process those leads.";
   await PipelineJob.updateOne(
     { _id: job._id, activeKey: "pipeline" },
     {
@@ -229,7 +313,10 @@ async function failStaleJob(job: PipelineJobDocument): Promise<boolean> {
   // The work is not coming back, so the lock must not outlive it.
   await PipelineLease.deleteMany({}).catch(() => undefined);
 
-  logger.warn({ jobId: String(job._id), type: job.type }, "pipeline job stopped heartbeating, marked failed");
+  logger.warn(
+    { jobId: String(job._id), type: job.type, reason: dead ? "no heartbeat" : "no progress" },
+    "pipeline job ended by the watchdog",
+  );
   return true;
 }
 
