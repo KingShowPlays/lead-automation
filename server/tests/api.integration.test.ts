@@ -484,6 +484,64 @@ describe("stats", () => {
     expect(res.body.byMaturity).toBeTypeOf("object");
     expect(res.body.bySource).toBeTypeOf("object");
   });
+
+  it("reports the funnel as stage-to-stage conversion, never widening", async () => {
+    const res = await request(app).get("/api/stats/analytics?days=all");
+    expect(res.status).toBe(200);
+
+    const funnel = res.body.funnel as Array<{ id: string; count: number; fromPrevious: number; ofDiscovered: number; dropped: number }>;
+    expect(funnel.map((stage) => stage.id)).toEqual([
+      "discovered",
+      "qualified",
+      "approved",
+      "contacted",
+      "responded",
+      "converted",
+    ]);
+    expect(funnel[0].count).toBe(res.body.totals.total);
+
+    // A stage can never hold more than the one before it, and the drop has to
+    // account for the difference. This is what catches a miscounted stage.
+    for (let i = 1; i < funnel.length; i++) {
+      expect(funnel[i].count).toBeLessThanOrEqual(funnel[i - 1].count);
+      expect(funnel[i].dropped).toBe(funnel[i - 1].count - funnel[i].count);
+      expect(funnel[i].fromPrevious).toBeLessThanOrEqual(100);
+      expect(funnel[i].ofDiscovered).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("buckets discovery over time and never counts more qualified than found", async () => {
+    const res = await request(app).get("/api/stats/analytics?days=all");
+    expect(res.status).toBe(200);
+    expect(["day", "week", "month"]).toContain(res.body.timeline.bucket);
+
+    const points = res.body.timeline.points as Array<{ date: string; discovered: number; qualified: number }>;
+    expect(points.length).toBeGreaterThan(0);
+    const discovered = points.reduce((sum, point) => sum + point.discovered, 0);
+    expect(discovered).toBe(res.body.totals.total);
+    for (const point of points) expect(point.qualified).toBeLessThanOrEqual(point.discovered);
+    // Buckets must come out in order, or the chart draws time backwards.
+    expect([...points].sort((a, b) => (a.date < b.date ? -1 : 1))).toEqual(points);
+  });
+
+  it("reports qualification rates per city and category that agree with the totals", async () => {
+    const res = await request(app).get("/api/stats/analytics?days=all");
+    expect(res.status).toBe(200);
+
+    for (const key of ["qualificationByCity", "qualificationByCategory"] as const) {
+      const rows = res.body[key] as Array<{ name: string; total: number; qualified: number; rate: number }>;
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row.qualified).toBeLessThanOrEqual(row.total);
+        expect(row.rate).toBe(Math.round((row.qualified / row.total) * 100));
+      }
+    }
+
+    // The grouped totals are the same documents as the flat breakdown, so they
+    // have to agree. They came from separate aggregations until recently.
+    const cityRows = res.body.qualificationByCity as Array<{ name: string; total: number }>;
+    for (const row of cityRows) expect(res.body.byCity[row.name]).toBe(row.total);
+  });
 });
 
 describe("pipeline safety", () => {

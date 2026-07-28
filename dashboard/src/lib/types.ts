@@ -239,12 +239,36 @@ export interface AnalyticsStats {
     needBuckets: Record<string, number>;
     reachBuckets: Record<string, number>;
   };
+  /** Ordered pipeline stages, each carrying how much of the previous survived. */
+  funnel: Array<{
+    id: string;
+    label: string;
+    count: number;
+    fromPrevious: number;
+    ofDiscovered: number;
+    dropped: number;
+  }>;
+  /** Discovery over the window. The bucket widens as the window does. */
+  timeline: {
+    bucket: "day" | "week" | "month";
+    points: Array<{ date: string; discovered: number; qualified: number }>;
+  };
+  qualificationByCity: QualificationRate[];
+  qualificationByCategory: QualificationRate[];
   byMaturity: Record<string, number>;
   bySource: Record<string, number>;
   byCity: Record<string, number>;
   byCategory: Record<string, number>;
   byWebsiteType: Record<string, number>;
   recentRuns: Stats["recentRuns"];
+}
+
+/** How much of a group was worth pitching, not just how big the group is. */
+export interface QualificationRate {
+  name: string;
+  total: number;
+  qualified: number;
+  rate: number;
 }
 
 export interface SuppressionEntry {

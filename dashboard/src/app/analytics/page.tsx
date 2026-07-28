@@ -14,7 +14,7 @@ import {
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import { useLiveData } from "@/lib/live";
-import type { AnalyticsStats } from "@/lib/types";
+import type { AnalyticsStats, QualificationRate } from "@/lib/types";
 
 const WINDOWS = [
   [7, "7 days"],
@@ -177,19 +177,30 @@ export default function AnalyticsPage() {
 
           <section className="mt-6 grid items-start gap-6 xl:grid-cols-12">
             <div className="panel accent-brand border-t-4 xl:col-span-4">
-              <PanelHeading title="Top cities" description="Where the current lead cohort is concentrated." />
-              <Distribution values={stats.byCity} total={stats.totals.total} limit={8} hrefFor={(key) => `/leads?city=${encodeURIComponent(key)}`} />
+              <PanelHeading title="Best cities" description="The share of businesses found in each city that were worth pitching." />
+              <QualificationRates rows={stats.qualificationByCity} hrefFor={(name) => `/leads?city=${encodeURIComponent(name)}`} />
             </div>
             <div className="panel accent-purple border-t-4 xl:col-span-4">
-              <PanelHeading title="Top categories" description="Business segments producing the most opportunities." />
-              <Distribution values={stats.byCategory} total={stats.totals.total} limit={8} hrefFor={(key) => `/leads?category=${encodeURIComponent(key)}`} tone="purple" />
+              <PanelHeading title="Best categories" description="Which business segments qualify most often, not just which are largest." />
+              <QualificationRates rows={stats.qualificationByCategory} hrefFor={(name) => `/leads?category=${encodeURIComponent(name)}`} tone="purple" />
             </div>
             <div className="panel accent-emerald border-t-4 xl:col-span-4">
-              <PanelHeading title="Commercial outcomes" description="Conversion rates for leads discovered in this reporting window." />
-              <FunnelRow label="Tracked leads" value={stats.totals.total} percent={100} />
-              <FunnelRow label="Contacted" value={stats.totals.contacted} percent={Math.round((stats.totals.contacted / Math.max(stats.totals.total, 1)) * 100)} />
-              <FunnelRow label="Interested" value={stats.totals.interested} percent={derived.interestRate} suffix="of contacted" />
-              <FunnelRow label="Converted" value={stats.totals.converted} percent={derived.closeRate} suffix="of interested" />
+              <PanelHeading title="Pipeline conversion" description="How much of each stage survives into the next, and where leads are lost." />
+              <StageFunnel stages={stats.funnel} />
+            </div>
+          </section>
+
+          <section className="mt-6 grid items-start gap-6 xl:grid-cols-12">
+            <div className="panel accent-emerald border-t-4 xl:col-span-7">
+              <PanelHeading title="Discovery over time" description="Businesses found in each period, and how many of them qualified." />
+              <Timeline series={stats.timeline} />
+            </div>
+            <div className="panel accent-slate border-t-4 xl:col-span-5">
+              <PanelHeading title="Where the cohort sits" description="Raw volume by city and by category, for the same window." />
+              <div className="grid gap-7 md:grid-cols-2">
+                <Distribution title="By city" values={stats.byCity} total={stats.totals.total} limit={6} hrefFor={(key) => `/leads?city=${encodeURIComponent(key)}`} />
+                <Distribution title="By category" values={stats.byCategory} total={stats.totals.total} limit={6} hrefFor={(key) => `/leads?category=${encodeURIComponent(key)}`} tone="purple" />
+              </div>
             </div>
           </section>
 
@@ -314,6 +325,143 @@ function ChannelMetric({
         {channel} · {Math.round((value / Math.max(total, 1)) * 100)}%
       </span>
     </Link>
+  );
+}
+
+/**
+ * The pipeline as rates, not as counts.
+ *
+ * The bar is the share of everything discovered, so the steps stay comparable
+ * down the column. The line under it carries the number that actually points at
+ * a problem: how much of the previous stage survived, and how many were lost.
+ */
+function StageFunnel({ stages }: { stages: AnalyticsStats["funnel"] }) {
+  return (
+    <div className="space-y-4">
+      {stages.map((stage, index) => (
+        <div key={stage.id}>
+          <div className="flex items-end justify-between gap-3 text-sm">
+            <span className="font-semibold">{stage.label}</span>
+            <strong className="font-heading tabular-nums">{stage.count.toLocaleString()}</strong>
+          </div>
+          <div
+            className="mt-1.5 h-2 bg-slate-100 dark:bg-slate-800"
+            title={`${stage.label}: ${stage.count.toLocaleString()} (${stage.ofDiscovered}% of discovered)`}
+          >
+            <div
+              className="h-full bg-emerald-600"
+              style={{ width: `${Math.max(Math.min(stage.ofDiscovered, 100), stage.count ? 2 : 0)}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[10px] text-slate-400">
+            {index === 0 ? (
+              `${stage.ofDiscovered}% of cohort`
+            ) : (
+              <>
+                {stage.fromPrevious}% of {stages[index - 1].label.toLowerCase()}
+                {stage.dropped > 0 && <span className="text-slate-500"> · {stage.dropped.toLocaleString()} lost here</span>}
+              </>
+            )}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Discovery over time, with the qualified share nested inside each bar.
+ *
+ * Qualified is a subset of discovered, so it is drawn inside the same bar
+ * rather than beside it: the comparison is part to whole, and nesting says that
+ * where two separate bars would invite reading them as unrelated totals. It
+ * also means the two series are told apart by position rather than by hue,
+ * which keeps working when the palette changes underneath it.
+ */
+function Timeline({ series }: { series: AnalyticsStats["timeline"] }) {
+  if (series.points.length === 0) {
+    return <p className="py-8 text-center text-sm text-slate-400">No discoveries in this period.</p>;
+  }
+  const peak = Math.max(...series.points.map((point) => point.discovered), 1);
+  const label = (date: string) =>
+    series.bucket === "month"
+      ? new Date(`${date}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "short", year: "2-digit", timeZone: "UTC" })
+      : new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-3 bg-emerald-600" /> Qualified</span>
+        <span className="flex items-center gap-1.5"><span className="h-2 w-3 bg-slate-200 dark:bg-slate-700" /> Not qualified</span>
+      </div>
+      <div className="flex h-40 items-end gap-1" role="img" aria-label={`Businesses discovered per ${series.bucket}, with the qualified share of each`}>
+        {series.points.map((point) => (
+          <div
+            key={point.date}
+            /* Capped, so a window holding one bucket draws a bar rather than a
+               block the width of the panel. */
+            className="group relative flex h-full min-w-0 max-w-16 flex-1 flex-col justify-end"
+            title={`${label(point.date)}: ${point.discovered.toLocaleString()} discovered, ${point.qualified.toLocaleString()} qualified`}
+          >
+            {/*
+              `justify-end` seats the qualified portion on the baseline. It was
+              a percentage margin-top first, which looked right until the bars
+              got wide: percentage margins resolve against the container's
+              width, not its height, so the fill slid off the bottom.
+            */}
+            <div
+              className="flex w-full flex-col justify-end bg-slate-200 dark:bg-slate-700"
+              style={{ height: `${Math.max((point.discovered / peak) * 100, 2)}%` }}
+            >
+              <div
+                className="w-full bg-emerald-600"
+                style={{ height: `${point.discovered ? (point.qualified / point.discovered) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Only the ends are labelled. A tick under every bar is unreadable at a
+          month of dailies, and the rest are one hover away. */}
+      <div className="mt-2 flex justify-between text-[10px] text-slate-400">
+        <span>{label(series.points[0].date)}</span>
+        {series.points.length > 1 && <span>{label(series.points[series.points.length - 1].date)}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where the qualified leads actually come from, as a share of what was found
+ * there. Volume alone says only where the scan has been pointed so far.
+ */
+function QualificationRates({
+  rows,
+  hrefFor,
+  tone = "brand",
+}: {
+  rows: QualificationRate[];
+  hrefFor: (name: string) => string;
+  tone?: "brand" | "purple";
+}) {
+  if (rows.length === 0) return <p className="py-8 text-center text-sm text-slate-400">No data in this period.</p>;
+  const fill = tone === "purple" ? "bg-purple-600" : "bg-brand-600";
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <Link key={row.name} href={hrefFor(row.name)} className="block hover:text-brand-600">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="min-w-0 truncate font-semibold capitalize">{row.name.replaceAll("_", " ").toLowerCase()}</span>
+            <span className="shrink-0 font-extrabold tabular-nums">
+              {row.rate}% <span className="font-normal text-slate-400">· {row.qualified.toLocaleString()} of {row.total.toLocaleString()}</span>
+            </span>
+          </div>
+          <div className="mt-1.5 h-2 bg-slate-100 dark:bg-slate-800" title={`${row.name}: ${row.qualified} of ${row.total} qualified`}>
+            <div className={`h-full ${fill}`} style={{ width: `${Math.max(row.rate, row.qualified ? 2 : 0)}%` }} />
+          </div>
+        </Link>
+      ))}
+    </div>
   );
 }
 
