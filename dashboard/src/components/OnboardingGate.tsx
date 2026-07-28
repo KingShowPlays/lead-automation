@@ -156,7 +156,13 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-2 sm:p-4 backdrop-blur-md">
+    // Marked so automated checks can tell they are looking at the wizard
+    // rather than at the page they asked for. It covers everything, so a tool
+    // that measures the page without noticing measures this instead.
+    <div
+      data-onboarding-gate
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-2 sm:p-4 backdrop-blur-md"
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

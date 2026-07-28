@@ -51,3 +51,75 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  layout:
+    name: Mobile layout audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      MONGODB_URI: mongodb://localhost:27017/yean_ci
+      API_KEY: ci-not-a-secret
+      API_URL: http://localhost:4000
+      DASHBOARD_ORIGIN: http://localhost:3000
+      ENABLE_SCHEDULER: "false"
+      # No DASHBOARD_PASSWORD, so auth stays off and the audit does not have to
+      # sign in. Setting one here would put a password in a public log for no
+      # benefit: this database holds eight fictional businesses.
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: dashboard
+
+      - run: npm run build
+
+      # Real rows, because the audit is measuring layout and an empty table
+      # cannot overflow. The seeder checks the sample sites over the network, so
+      # the classifications it lands on vary between runs; that does not matter
+      # here, since nothing below asserts on what the data says, only on where
+      # it sits.
+      - name: Seed sample data
+        run: npm run seed --workspace server
+
+      - name: Start the API and the dashboard
+        run: |
+          npm run start:server > /tmp/api.log 2>&1 &
+          npm run start:dashboard > /tmp/dashboard.log 2>&1 &
+          npx --yes wait-on -t 120000 http://localhost:4000/health http://localhost:3000/health
+
+      # Without this the first-run wizard covers every route, and the audit
+      # measures that one modal at every width and reports a clean run.
+      - name: Mark onboarding complete
+        run: |
+          curl -fsS -X POST http://localhost:4000/api/settings/onboarding \
+            -H "x-api-key: $API_KEY" -H 'content-type: application/json' \
+            -d '{"complete":true}' -o /dev/null
+
+      - name: Audit every route at phone and tablet widths
+        run: node audit-mobile.mjs --base http://localhost:3000
+        working-directory: dashboard
+
+      - name: Service logs
+        if: failure()
+        run: tail -50 /tmp/api.log /tmp/dashboard.log

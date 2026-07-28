@@ -155,6 +155,24 @@ async function signIn(context) {
 }
 
 /**
+ * Waits for the real page, not for the network.
+ *
+ * Every data view fetches after hydration, so `networkidle` resolves while the
+ * page is still a column of placeholders, and the audit was measuring those.
+ * Analytics takes about ten seconds to fill in; the old wait was half a second,
+ * so a clean result on that route meant a skeleton fits on a phone.
+ *
+ * Waiting for the skeletons to go rather than for any particular element keeps
+ * this route-agnostic, and handles a filter that legitimately matches nothing:
+ * the empty state replaces the skeleton just as a table would.
+ */
+async function settled(page, timeout = 30000) {
+  await page
+    .waitForFunction(() => document.querySelectorAll(".skeleton-block").length === 0, null, { timeout })
+    .catch(() => {});
+}
+
+/**
  * Applies a theme preset through the interface before measuring.
  *
  * Layout is now a setting, so "nothing overflows" is only true of the theme in
@@ -202,6 +220,23 @@ for (const width of WIDTHS) {
 
   for (const route of ROUTES) {
     await page.goto(`${BASE}${route.path}`, { waitUntil: "networkidle" }).catch(() => {});
+    await settled(page);
+
+    /*
+     * The first-run wizard covers the whole screen until onboarding is marked
+     * complete, so against a fresh database every route measures the wizard and
+     * the audit reports that nothing overflows. Stopping is the point: a clean
+     * result has to mean the pages were clean, not that they were never seen.
+     */
+    if (await page.locator("[data-onboarding-gate]").count()) {
+      console.error(
+        `\nThe onboarding wizard is covering ${route.path}, so there is nothing to measure.\n` +
+          "Mark onboarding complete first:\n" +
+          `  curl -X POST "$API_URL/api/settings/onboarding" -H "x-api-key: $API_KEY" \\\n` +
+          `       -H 'content-type: application/json' -d '{"complete":true}'\n`,
+      );
+      process.exit(2);
+    }
     await page.evaluate(() => document.fonts.ready).catch(() => {});
     await page.waitForTimeout(500);
     if (route.open) await route.open(page).catch(() => {});
