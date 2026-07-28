@@ -12,6 +12,7 @@ import {
   RiRadarLine,
   RiCheckboxCircleFill,
   RiCloseCircleFill,
+  RiCloseLine,
   RiErrorWarningLine,
   RiArrowRightLine,
   RiTimeLine,
@@ -53,6 +54,7 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [operations, setOperations] = useState<PipelineOperationalStatus | null>(null);
   const [starting, setStarting] = useState<PipelineJob["type"] | null>(null);
+  const [dismissing, setDismissing] = useState(false);
   const previousActiveJob = useRef<string | null>(null);
   const operationsReady = useRef(false);
 
@@ -117,6 +119,31 @@ export default function OverviewPage() {
       pitchPending: current?.pitchPending ?? 0,
       resumableRun: current?.resumableRun ?? null,
     }));
+  }
+
+  /**
+   * Puts down the report of a run that went wrong.
+   *
+   * The panel is hidden immediately rather than after the round trip, because
+   * pressing dismiss and watching the thing stay put is the complaint this is
+   * answering. If the write fails it comes back, with a reason.
+   */
+  async function dismissReport() {
+    const job = operations?.latestJob;
+    if (!job) return;
+    setDismissing(true);
+    const acknowledgedAt = new Date().toISOString();
+    setOperations((current) => (current?.latestJob ? { ...current, latestJob: { ...current.latestJob, acknowledgedAt } } : current));
+    try {
+      await api.acknowledgeJob(job._id);
+    } catch (err) {
+      setOperations((current) =>
+        current?.latestJob ? { ...current, latestJob: { ...current.latestJob, acknowledgedAt: undefined } } : current,
+      );
+      toast.error(err instanceof Error ? err.message : "Could not dismiss the report");
+    } finally {
+      setDismissing(false);
+    }
   }
 
   async function runPipeline() {
@@ -527,30 +554,9 @@ export default function OverviewPage() {
         reads as "everything is fine" when it is not.
       */}
       {!operations?.activeJob &&
+        !operations?.latestJob?.acknowledgedAt &&
         (operations?.latestJob?.status === "FAILED" || operations?.latestJob?.status === "PARTIAL") && (
-          <section className="panel accent-cta mt-6 border-t-4" role="status">
-            <div className="section-heading">
-              <div className="min-w-0">
-                <h2 className="section-title">
-                  {operations.latestJob.status === "FAILED" ? "The last scan did not finish" : "The last scan finished with problems"}
-                </h2>
-                <p className="section-description break-words">
-                  {operations.latestJob.error ?? operations.latestJob.progress.message}
-                </p>
-              </div>
-              <RiErrorWarningLine className="h-5 w-5 shrink-0 text-cta-500" />
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-              <ProgressValue label="Found" value={operations.latestJob.progress.found} />
-              <ProgressValue label="Created" value={operations.latestJob.progress.created} />
-              <ProgressValue label="Processed" value={operations.latestJob.progress.processed} />
-              <ProgressValue label="Qualified" value={operations.latestJob.progress.qualified} />
-            </div>
-            <p className="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              Nothing found so far was lost. Use the actions above to retry the searches that failed, or to finish
-              processing the leads that were already found.
-            </p>
-          </section>
+          <ScanReport job={operations.latestJob} onDismiss={dismissReport} dismissing={dismissing} />
         )}
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-12">
@@ -561,6 +567,81 @@ export default function OverviewPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * What a run that went wrong left behind.
+ *
+ * Two things were wrong with the old version. It wore the call-to-action
+ * colour, which is the colour of the button you are meant to press, not of
+ * something that failed. And it could not be put down: the notice stayed until
+ * some later run happened to replace it, so a single bad scan sat on the
+ * overview indefinitely.
+ *
+ * The figures are the point, so they lead. Partial and failed are told apart by
+ * their own status colours rather than by reading the heading.
+ */
+function ScanReport({
+  job,
+  onDismiss,
+  dismissing,
+}: {
+  job: PipelineJob;
+  onDismiss: () => void;
+  dismissing: boolean;
+}) {
+  const failed = job.status === "FAILED";
+  const tone = failed
+    ? { accent: "accent-rose", ink: "text-rose-600 dark:text-rose-400", fill: "bg-rose-600" }
+    : { accent: "accent-cta", ink: "text-amber-600 dark:text-amber-400", fill: "bg-amber-500" };
+
+  const kept = job.progress.created > 0 || job.progress.qualified > 0;
+
+  return (
+    <section className={`panel ${tone.accent} mt-6 border-t-4`} role="status">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={`mt-0.5 shrink-0 ${tone.ink}`}>
+          <RiErrorWarningLine className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="section-title !mb-0">
+              {failed ? "The last scan did not finish" : "The last scan finished with problems"}
+            </h2>
+            <span className={`text-[10px] font-extrabold uppercase tracking-wider ${tone.ink}`}>
+              {failed ? "Failed" : "Partial"}
+            </span>
+          </div>
+          <p className="mt-1 break-words text-sm text-slate-500 dark:text-slate-400">
+            {job.error ?? job.progress.message}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={dismissing}
+          className="btn-ghost shrink-0 !px-3"
+          aria-label="Dismiss this report"
+        >
+          {dismissing ? <span className="loader-spinner h-4 w-4 border-2 border-slate-300 border-t-slate-600" /> : <RiCloseLine className="h-4 w-4" />}
+          Dismiss
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <ProgressValue label="Found" value={job.progress.found} />
+        <ProgressValue label="Created" value={job.progress.created} />
+        <ProgressValue label="Processed" value={job.progress.processed} />
+        <ProgressValue label="Qualified" value={job.progress.qualified} />
+      </div>
+
+      <p className="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        {kept
+          ? "Everything found before the problem was kept. Use the actions above to retry the searches that failed, or to finish processing the leads already found."
+          : "No leads were lost, because none had been saved when it stopped. Run the scan again when you are ready."}
+      </p>
+    </section>
   );
 }
 

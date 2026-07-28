@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { SearchRun } from "../models/SearchRun.js";
+import { PipelineJob } from "../models/PipelineJob.js";
 import { asyncHandler, validateBody } from "../middleware/index.js";
 import { discover, processPendingLeads, runFullPipeline } from "../services/pipeline/runPipeline.js";
 import {
@@ -82,6 +83,26 @@ pipelineRouter.get(
   "/jobs/status",
   asyncHandler(async (_req, res) => {
     res.json(await getPipelineOperationalStatus());
+  }),
+);
+
+/**
+ * POST /api/pipeline/jobs/:id/acknowledge, put down the report of a bad run.
+ *
+ * Dismissing is recorded rather than kept in the browser, so the notice does
+ * not come back on the next reload or reappear for a colleague who has already
+ * been told about it.
+ */
+pipelineRouter.post(
+  "/jobs/:id/acknowledge",
+  asyncHandler(async (req, res) => {
+    const job = await PipelineJob.findByIdAndUpdate(
+      req.params.id,
+      { $set: { acknowledgedAt: new Date() } },
+      { new: true },
+    );
+    if (!job) return res.status(404).json({ error: "Pipeline job not found" });
+    res.json({ job });
   }),
 );
 

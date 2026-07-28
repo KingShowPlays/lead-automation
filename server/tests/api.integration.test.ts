@@ -902,3 +902,82 @@ describe("background pipeline recovery", () => {
     expect(status.body.resumableRun.recoverableQueries).toBe(2);
   });
 });
+
+describe("dismissing the report of a bad run", () => {
+  it("hides a partial run once acknowledged, and keeps it hidden", async () => {
+    const job = await PipelineJob.create({
+      type: "FULL",
+      trigger: "MANUAL",
+      status: "PARTIAL",
+      phase: "COMPLETE",
+      progress: {
+        current: 5,
+        total: 10,
+        message: "2 searches failed",
+        found: 20,
+        created: 5,
+        failedQueries: 2,
+        processed: 5,
+        qualified: 3,
+        processingErrors: 0,
+        aiFallbacks: 0,
+      },
+    });
+
+    const before = await request(app).get("/api/pipeline/jobs/status");
+    expect(before.body.latestJob._id).toBe(String(job._id));
+    expect(before.body.latestJob.acknowledgedAt).toBeUndefined();
+
+    const ack = await request(app).post(`/api/pipeline/jobs/${job._id}/acknowledge`).send({});
+    expect(ack.status).toBe(200);
+    expect(ack.body.job.acknowledgedAt).toBeTruthy();
+
+    // Reading the status again has to still show it dismissed, because the
+    // whole complaint was that the notice came back.
+    const after = await request(app).get("/api/pipeline/jobs/status");
+    expect(after.body.latestJob.acknowledgedAt).toBeTruthy();
+    // Dismissing reports on the run; it does not pretend the run succeeded.
+    expect(after.body.latestJob.status).toBe("PARTIAL");
+  });
+
+  it("404s for a job that does not exist", async () => {
+    const res = await request(app).post("/api/pipeline/jobs/6a6869af2a86a4d3e8a75b3a/acknowledge").send({});
+    expect(res.status).toBe(404);
+  });
+});
+
+/*
+ * Last on purpose: this empties the collections the tests above are asserting
+ * against, so anything added after it starts from an empty database.
+ */
+describe("erasing working data", () => {
+  it("clears the leads and keeps the settings and the suppression list", async () => {
+    await makeLead({ businessName: "Wipe Me", businessNameNormalized: "wipe me", googlePlaceId: "wipe-1" });
+    await Suppression.create({ type: "EMAIL", value: "optout@example.com", reason: "asked" });
+    const settingsBefore = await getSettings();
+    const thresholdBefore = settingsBefore.scoreThreshold;
+    // Earlier tests add entries of their own, so the check is that the count
+    // does not move, not that it lands on any particular number.
+    const suppressionBefore = await Suppression.countDocuments();
+
+    expect(await Lead.countDocuments()).toBeGreaterThan(0);
+
+    const res = await request(app).post("/api/settings/wipe-data").send({});
+    expect(res.status).toBe(200);
+    expect(res.body.keptSuppression).toBe(true);
+
+    expect(await Lead.countDocuments()).toBe(0);
+    expect(await OutreachLog.countDocuments()).toBe(0);
+    // The do-not-contact list is the one thing a later scan cannot rebuild.
+    expect(await Suppression.countDocuments()).toBe(suppressionBefore);
+    expect((await getSettings()).scoreThreshold).toBe(thresholdBefore);
+  });
+
+  it("clears the suppression list only when asked explicitly", async () => {
+    expect(await Suppression.countDocuments()).toBeGreaterThan(0);
+    const res = await request(app).post("/api/settings/wipe-data").send({ includeSuppression: true });
+    expect(res.status).toBe(200);
+    expect(res.body.keptSuppression).toBe(false);
+    expect(await Suppression.countDocuments()).toBe(0);
+  });
+});

@@ -19,6 +19,7 @@ import {
   RiLoader4Line,
   RiRadarLine,
   RiRestartLine,
+  RiDeleteBinLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
 import { COUNTRIES } from "@/lib/contacts";
@@ -683,6 +684,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <WipeDataSection />
+
       {/* Sticky save on mobile */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/60 bg-white/80 p-3 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/80 lg:hidden">
         <button onClick={() => void save()} disabled={busy} className="btn-primary w-full justify-center">
@@ -696,6 +699,121 @@ export default function SettingsPage() {
 /* ---------------------------------------------------------------- */
 /* Small building blocks                                             */
 /* ---------------------------------------------------------------- */
+
+/**
+ * Empties the working data, keeping the setup.
+ *
+ * Deliberately awkward. The password has to be typed again even though the
+ * session is already signed in, because a session is enough to look at things
+ * and should not be enough to delete them from an unattended laptop. Nothing
+ * happens on the first press either: the button only arms the confirmation.
+ */
+function WipeDataSection() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [includeSuppression, setIncludeSuppression] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function wipe() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/wipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, includeSuppression }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        deleted?: Record<string, number>;
+        keptSuppression?: boolean;
+      };
+      if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+
+      const total = Object.values(body.deleted ?? {}).reduce((sum, n) => sum + n, 0);
+      toast.success(`${total.toLocaleString()} records deleted. Your settings and theme are untouched.`);
+      setPassword("");
+      setOpen(false);
+      setIncludeSuppression(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Nothing was deleted");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel accent-rose mt-6 border-t-4">
+      <SectionTitle icon={<RiDeleteBinLine className="h-5 w-5" />} title="Erase working data" />
+      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+        Deletes every lead, outreach record, scan history and pipeline job. Everything on this page stays, along with
+        your theme, so the system keeps its providers, targets and scoring and simply has nothing in it. There is no
+        undo.
+      </p>
+
+      {!open ? (
+        <button type="button" className="btn-ghost mt-4 text-rose-600 dark:text-rose-400" onClick={() => setOpen(true)}>
+          <RiDeleteBinLine className="h-4 w-4" /> Erase working data
+        </button>
+      ) : (
+        <div className="mt-4 max-w-xl border border-rose-300 p-4 dark:border-rose-900">
+          <label className="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500" htmlFor="wipe-password">
+            Confirm with your dashboard password
+          </label>
+          <input
+            id="wipe-password"
+            type="password"
+            autoComplete="current-password"
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+          />
+
+          <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <input
+              type="checkbox"
+              className="mt-0.5 shrink-0"
+              checked={includeSuppression}
+              onChange={(e) => setIncludeSuppression(e.target.checked)}
+            />
+            {/*
+              Off by default and spelled out, because this is the only deletion
+              here that a later scan cannot undo: the people on that list said
+              do not contact me, and clearing it makes them contactable again.
+            */}
+            <span>
+              Also delete the suppression list. Leave this off unless you mean it: it is the record of everyone who
+              asked not to be contacted, and a new scan will find them again.
+            </span>
+          </label>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={busy || password.length === 0}
+              onClick={() => void wipe()}
+            >
+              <RiDeleteBinLine className="h-4 w-4" /> {busy ? "Erasing…" : "Erase everything now"}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false);
+                setPassword("");
+                setIncludeSuppression(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (

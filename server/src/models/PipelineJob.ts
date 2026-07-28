@@ -29,6 +29,14 @@ export interface PipelineJobDocument extends Document {
     aiFallbacks: number;
   };
   error?: string;
+  /**
+   * When the operator dismissed the report of this run.
+   *
+   * A run that ended badly keeps saying so on the overview, which is right
+   * until it has been read. Without this there was no way to put it down: the
+   * warning stayed until some later run happened to replace it.
+   */
+  acknowledgedAt?: Date;
 }
 
 const pipelineJobSchema = new Schema<PipelineJobDocument>(
@@ -69,6 +77,7 @@ const pipelineJobSchema = new Schema<PipelineJobDocument>(
       aiFallbacks: { type: Number, default: 0 },
     },
     error: String,
+    acknowledgedAt: Date,
   },
   { timestamps: true },
 );

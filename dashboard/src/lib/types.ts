@@ -192,6 +192,8 @@ export interface PipelineJob {
     aiFallbacks: number;
   };
   error?: string;
+  /** Set once the operator has dismissed the report of a run that went wrong. */
+  acknowledgedAt?: string;
 }
 
 export interface PipelineOperationalStatus {

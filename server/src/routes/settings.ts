@@ -2,6 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import cron from "node-cron";
 import { getSettings, Settings, type SettingsDocument } from "../models/Settings.js";
+import { Lead } from "../models/Lead.js";
+import { OutreachLog } from "../models/OutreachLog.js";
+import { PipelineJob } from "../models/PipelineJob.js";
+import { PipelineLease } from "../models/PipelineLease.js";
+import { SearchRun } from "../models/SearchRun.js";
+import { Suppression } from "../models/Suppression.js";
 import { asyncHandler, validateBody } from "../middleware/index.js";
 import {
   getAiRuntime,
@@ -290,6 +296,46 @@ settingsRouter.post(
     settings.onboardedAt = (req.body as { complete: boolean }).complete ? new Date() : null;
     await settings.save();
     res.json({ onboardedAt: settings.onboardedAt });
+  }),
+);
+
+/**
+ * POST /api/settings/wipe-data, empty the working data and keep the setup.
+ *
+ * Settings and the site theme survive, so the connected providers, targets,
+ * scoring weights and look all remain: this is for clearing out a trial run or
+ * a bad import, not for starting the deployment again.
+ *
+ * The suppression list survives by default and only goes if it is asked for
+ * explicitly. It is the record of who said do not contact me, and losing it
+ * makes those people contactable again, which is the one deletion here that
+ * cannot be undone by running another scan.
+ */
+settingsRouter.post(
+  "/wipe-data",
+  validateBody(z.object({ includeSuppression: z.boolean().default(false) }).strict()),
+  asyncHandler(async (req, res) => {
+    const { includeSuppression } = req.body as { includeSuppression: boolean };
+
+    const [leads, outreach, jobs, leases, runs] = await Promise.all([
+      Lead.deleteMany({}),
+      OutreachLog.deleteMany({}),
+      PipelineJob.deleteMany({}),
+      PipelineLease.deleteMany({}),
+      SearchRun.deleteMany({}),
+    ]);
+    const suppression = includeSuppression ? await Suppression.deleteMany({}) : null;
+
+    const deleted = {
+      leads: leads.deletedCount ?? 0,
+      outreachLogs: outreach.deletedCount ?? 0,
+      pipelineJobs: jobs.deletedCount ?? 0,
+      pipelineLeases: leases.deletedCount ?? 0,
+      searchRuns: runs.deletedCount ?? 0,
+      suppression: suppression?.deletedCount ?? 0,
+    };
+    logger.warn({ deleted, includeSuppression }, "working data wiped on request");
+    res.json({ deleted, keptSuppression: !includeSuppression });
   }),
 );
 

@@ -261,6 +261,27 @@ select,
   transition-timing-function: var(--ease);
 }
 
+/*
+ * Switching theme is not an animation.
+ *
+ * The rule above makes cards and controls ease between colours, which is right
+ * when one of them changes on hover and wrong when all of them change at once.
+ * The page background carries no transition, so a theme change repainted the
+ * page instantly and then spent the fade showing the old cards on the new
+ * background: measured at 138ms of white panels on a near-black page.
+ *
+ * The provider sets this attribute around the moment it writes new tokens, so
+ * everything lands on the same frame.
+ */
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
 html[data-motion-hover="on"] .metric-card:hover,
 html[data-motion-hover="on"] .queue-card:hover,
 html[data-motion-hover="on"] .lift:hover {

@@ -203,6 +203,9 @@ export const api = {
 
   pipelineJob: (id: string) => req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}`),
 
+  acknowledgeJob: (id: string) =>
+    req<{ job: PipelineJob }>(`/api/pipeline/jobs/${id}/acknowledge`, { method: "POST", body: "{}" }),
+
   suppression: (page = 1) => req<{ items: SuppressionEntry[]; total: number; pages: number }>(`/api/suppression?page=${page}`),
 
   addSuppression: (type: string, value: string, reason?: string) =>
