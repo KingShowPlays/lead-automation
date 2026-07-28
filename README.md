@@ -177,10 +177,25 @@ stored as `DISCOVERED` can be processed without calling Places again.
 ## Testing
 
 ```bash
-npm test --workspace server        # ~200 tests: classifier, scoring, extraction, phone, email/AI
+npm test --workspace server        # 280 tests: classifier, scoring, extraction, phone, email/AI
                                    # providers, runtime-config resolution and secret masking,
                                    # plus a full API integration suite (in-memory or real MongoDB)
 ```
+
+The integration half of that suite needs a database. It uses an in-memory
+mongod by default, points at whatever you give it if you would rather supply
+one, and **skips** if it can find neither, so a machine with no MongoDB on it
+still gets a useful run.
+
+```bash
+TEST_MONGODB_URI=mongodb://localhost:27017 npm test --workspace server
+REQUIRE_INTEGRATION=1 ...           # turn that skip into a failure
+```
+
+Set `REQUIRE_INTEGRATION=1` anywhere the result is being trusted. The skip is a
+convenience locally and a trap everywhere else: fifty-one tests passing and
+fifty-one tests skipped look the same in a green tick. CI sets it, along with a
+mongod service container, so the suite cannot quietly stop testing anything.
 
 ## Docs
 

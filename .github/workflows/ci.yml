@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # A real mongod as a service container, rather than the in-memory one the
+    # tests fall back to. That fallback downloads a binary on first run, and on
+    # a runner that cannot reach the download it fails quietly and every
+    # integration test skips, which looks exactly like a pass.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_MONGODB_URI: mongodb://localhost:27017
+      # Turn a database that cannot be reached into a failure. Without this the
+      # suite would skip and the job would still be green.
+      REQUIRE_INTEGRATION: "1"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

@@ -44,12 +44,32 @@ beforeAll(async () => {
     await getSettings();
     app = createApp();
   } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+
+    /*
+     * Skipping is a convenience for a laptop with no MongoDB on it. Anywhere
+     * that is checking the build, it is a trap: every one of these tests
+     * skipped silently here for months because the in-memory mongod could not
+     * be downloaded, and the suite still reported success. Fifty-one tests
+     * passing and fifty-one tests skipped look identical in a green tick.
+     *
+     * So CI, and anyone who asks for it, gets a failure instead.
+     */
+    if (process.env.REQUIRE_INTEGRATION === "1" || process.env.CI === "true") {
+      throw new Error(
+        `Integration suite could not reach a database, and skipping is disabled here.\n` +
+          `Set TEST_MONGODB_URI to a MongoDB-compatible server (a real mongod, or FerretDB).\n` +
+          `Reason: ${reason}`,
+      );
+    }
+
     dbAvailable = false;
     // eslint-disable-next-line no-console
     console.warn(
       "\n[integration] No MongoDB available, skipping integration suite.\n" +
         "Set TEST_MONGODB_URI to a MongoDB-compatible server to run it.\n" +
-        `Reason: ${err instanceof Error ? err.message : String(err)}\n`,
+        "Set REQUIRE_INTEGRATION=1 to make this a failure instead of a skip.\n" +
+        `Reason: ${reason}\n`,
     );
   }
 });
