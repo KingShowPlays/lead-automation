@@ -19,7 +19,7 @@ import { PitchGroupCache, type GroupedPitch } from "../pitch/pitchGroups.js";
 import { assignChannel } from "../outreach/channel.js";
 import { isSuppressed } from "../suppression.js";
 import { normalizeBusinessName } from "../../utils/text.js";
-import { DEFAULT_COUNTRY, normalizePhone } from "../../utils/phone.js";
+import { DEFAULT_COUNTRY, countryFromAddress, normalizePhone } from "../../utils/phone.js";
 import { mapWithConcurrency } from "../../utils/async.js";
 import { getCheckerRuntime, getPlacesKey } from "../../config/runtime.js";
 import { runExtraSources, type SourceRunStats } from "../discovery/sources/runSources.js";
@@ -124,7 +124,7 @@ async function discoverUnlocked(
         stats.found = businesses.length;
 
         for (const biz of businesses) {
-          const outcome = await upsertDiscovered(biz, settings.defaultCountry);
+          const outcome = await upsertDiscovered(biz);
           stats[outcome]++;
         }
       } catch (err) {
@@ -243,8 +243,16 @@ export async function resumeDiscoveryRun(
 
 export type UpsertOutcome = "created" | "duplicates" | "suppressed";
 
-/** Places-specific adapter: maps a DiscoveredBusiness to the shared upsert. */
-async function upsertDiscovered(biz: DiscoveredBusiness, country: string): Promise<UpsertOutcome> {
+/**
+ * Places-specific adapter: maps a DiscoveredBusiness to the shared upsert.
+ *
+ * The country is read off the business's own address rather than taken from a
+ * setting, because one scan covers several countries: the cities are whatever
+ * the operator listed. When the address does not say, nothing is assumed and
+ * the number is kept exactly as it was found.
+ */
+async function upsertDiscovered(biz: DiscoveredBusiness): Promise<UpsertOutcome> {
+  const country = countryFromAddress(biz.address)?.iso ?? null;
   return upsertIncomingLead(
     {
       businessName: biz.businessName,
@@ -276,7 +284,8 @@ async function upsertDiscovered(biz: DiscoveredBusiness, country: string): Promi
  */
 export async function upsertIncomingLead(
   incoming: IncomingLead,
-  country: string = DEFAULT_COUNTRY,
+  /** null when the source did not say. Numbers are then kept as found. */
+  country: string | null = DEFAULT_COUNTRY,
 ): Promise<UpsertOutcome> {
   const nameNorm = normalizeBusinessName(incoming.businessName);
   const instagram = incoming.instagramUsername?.replace(/^@/, "").trim().toLowerCase();
@@ -449,7 +458,7 @@ export async function processLead(lead: LeadDocument, pitches?: PitchGroupCache)
   lead.pipelineStage = "CHECKED";
 
   // 2) Enrichment (contacts with provenance)
-  await enrichLead(lead, undefined, settings.defaultCountry);
+  await enrichLead(lead, undefined, countryFromAddress(lead.address)?.iso ?? null);
   lead.pipelineStage = "ENRICHED";
 
   // Re-check suppression now that we know email/phone/instagram.

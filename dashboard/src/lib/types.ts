@@ -323,7 +323,7 @@ export interface Settings {
   /** Optional so a dashboard talking to an older server still typechecks. */
   pitch?: { reuseAcrossSimilarLeads?: boolean };
   /** ISO-2 country a phone number without a country code is read as. */
-  defaultCountry?: string;
+
   onboardedAt: string | null;
 }
 

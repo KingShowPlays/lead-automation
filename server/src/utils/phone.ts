@@ -91,7 +91,52 @@ function national(digits: string, rules: CountryPhoneRules): string | null {
  * carry one of its own. It only ever acts as a default: a number written with
  * an explicit country code keeps it.
  */
-export function normalizePhone(raw: string | null | undefined, country: string = DEFAULT_COUNTRY): string | null {
+/**
+ * Reads the country out of a formatted address.
+ *
+ * Places returns addresses that end in the country name, and a scan may cover
+ * several countries at once, so the country belongs to the business rather than
+ * to the account. Returns null when it cannot tell, and the caller is expected
+ * to leave the number alone rather than guess: a Ghanaian number read as
+ * Nigerian is worse than an unformatted one.
+ */
+export function countryFromAddress(address: string | null | undefined): CountryPhoneRules | null {
+  if (!address) return null;
+  const tail = address.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean).pop();
+  if (!tail) return null;
+  for (const rules of COUNTRY_RULES) {
+    if (tail === rules.name.toLowerCase() || tail === rules.iso.toLowerCase()) return rules;
+    if (ALIASES[tail] === rules.iso) return rules;
+  }
+  return null;
+}
+
+/** Names a country is written under that are not its formal name. */
+const ALIASES: Record<string, string> = {
+  uk: "GB",
+  "united kingdom": "GB",
+  england: "GB",
+  scotland: "GB",
+  wales: "GB",
+  "northern ireland": "GB",
+  usa: "US",
+  "united states of america": "US",
+  uae: "AE",
+  "u.a.e.": "AE",
+};
+
+/**
+ * Normalises a number to E.164.
+ *
+ * `country` is what the number should be read as when it does not say. Pass
+ * null when that is genuinely unknown: the number is then only accepted if it
+ * carries its own dial code, and otherwise left for the caller to show as
+ * found. Guessing is how every phone number in the database ended up Nigerian.
+ */
+export function normalizePhone(
+  raw: string | null | undefined,
+  country: string | null = DEFAULT_COUNTRY,
+): string | null {
   if (!raw) return null;
 
   const cleaned = raw.replace(/[^\d+]/g, "");
@@ -102,10 +147,10 @@ export function normalizePhone(raw: string | null | undefined, country: string =
   let digits = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned.startsWith("00") ? cleaned.slice(2) : cleaned;
   if (!/^\d+$/.test(digits)) return null;
 
-  const home = rulesFor(country);
+  const home = country ? rulesFor(country) : null;
 
   // Written with the home country's dial code, with or without a plus.
-  if (digits.startsWith(home.dial)) {
+  if (home && digits.startsWith(home.dial)) {
     const rest = national(digits.slice(home.dial.length), home);
     if (rest) return `+${home.dial}${rest}`;
   }
@@ -122,6 +167,10 @@ export function normalizePhone(raw: string | null | undefined, country: string =
     if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
     return null;
   }
+
+  // No country code and no country to read it as. Leaving it unformatted is
+  // the honest answer; the raw number is still shown and still dialable.
+  if (!home) return null;
 
   // No country code: read it as a national number in the home country.
   const rest = national(digits, home);

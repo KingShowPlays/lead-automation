@@ -44,7 +44,8 @@ async function fetchHtml(url: string, timeoutMs = 12000): Promise<string | null>
 export async function enrichLead(
   lead: LeadDocument,
   homepageHtml?: string | null,
-  country: string = DEFAULT_COUNTRY,
+  /** null when the business's country is unknown; numbers stay as found. */
+  country: string | null = DEFAULT_COUNTRY,
 ): Promise<void> {
   // ---- Phone from Places ----
   if (lead.phone) {

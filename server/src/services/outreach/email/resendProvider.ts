@@ -26,7 +26,9 @@ export class ResendProvider implements EmailProviderAdapter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress,
+        // Quoted, like every other provider here. An unquoted display name
+        // containing a comma is read as two recipients and the send fails.
+        from: msg.fromName ? `"${msg.fromName.replace(/"/g, "'")}" <${msg.fromAddress}>` : msg.fromAddress,
         to: [msg.to],
         subject: msg.subject,
         text: msg.body,

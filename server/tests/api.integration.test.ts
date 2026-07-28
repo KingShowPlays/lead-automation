@@ -89,6 +89,10 @@ function makeLead(overrides: Record<string, unknown> = {}) {
     businessNameNormalized: "crystal scents",
     category: "perfume stores",
     city: "Port Harcourt",
+    // Places always returns an address ending in the country, and the country
+    // is now read from it rather than from a setting. A fixture without one is
+    // a business whose country nobody knows, and its number is kept as found.
+    address: "12 Trans Amadi Rd, Port Harcourt, Rivers, Nigeria",
     googlePlaceId: `place-${Math.random().toString(36).slice(2)}`,
     phone: "0803 123 4567",
     pipelineStage: "DISCOVERED",

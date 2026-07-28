@@ -12,7 +12,7 @@ import type { ExtractedContacts } from "../../types.js";
  * publishes on its own public pages, and we record the exact source URL
  * for every value (NDPA provenance requirement).
  */
-export function extractContactsFromHtml(html: string, sourceUrl: string, country = DEFAULT_COUNTRY): ExtractedContacts {
+export function extractContactsFromHtml(html: string, sourceUrl: string, country: string | null = DEFAULT_COUNTRY): ExtractedContacts {
   const $ = cheerio.load(html);
   const out: ExtractedContacts = {
     emails: [],

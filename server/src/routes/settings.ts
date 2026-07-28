@@ -25,7 +25,6 @@ import {
 import { getActiveEmail } from "../services/outreach/email/index.js";
 import { searchPlaces } from "../services/discovery/googlePlaces.js";
 import { reloadScheduler } from "../services/scheduler.js";
-import { COUNTRY_RULES } from "../utils/phone.js";
 import { logger } from "../utils/logger.js";
 
 export const settingsRouter = Router();
@@ -249,12 +248,6 @@ settingsRouter.put(
         placesRequestsPerMinute: z.number().int().min(1).max(120).optional(),
         integrations: integrationsSchema.optional(),
         pitch: z.object({ reuseAcrossSimilarLeads: z.boolean().optional() }).strict().optional(),
-        defaultCountry: z
-          .string()
-          .length(2)
-          .transform((v) => v.toUpperCase())
-          .refine((v) => COUNTRY_RULES.some((c) => c.iso === v), "unsupported country code")
-          .optional(),
       })
       .strict(),
   ),
@@ -394,7 +387,14 @@ settingsRouter.post(
   asyncHandler(async (_req, res) => {
     const runtime = await getEmailRuntime();
     if (!runtime.configured) {
-      return res.json({ ok: false, error: "No email provider configured. Save your provider settings first." });
+      // Name what is actually absent. "Not configured" sends the operator back
+      // to a form of twenty fields with no idea which one is the problem.
+      return res.json({
+        ok: false,
+        error: runtime.missing.length
+          ? `Not ready to send. Still needed: ${runtime.missing.join("; ")}.`
+          : "No email provider is set up yet. Choose one above, fill it in, and save.",
+      });
     }
     const { provider } = await getActiveEmail();
     if (!provider) return res.json({ ok: false, error: "Email provider could not be initialised" });

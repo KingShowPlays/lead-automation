@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyMobile, normalizeNigerianPhone, normalizePhone, phoneFromWhatsAppLink } from "../src/utils/phone.js";
+import { countryFromAddress, isLikelyMobile, normalizeNigerianPhone, normalizePhone, phoneFromWhatsAppLink } from "../src/utils/phone.js";
 
 describe("normalizeNigerianPhone", () => {
   it("normalizes local format with leading 0", () => {
@@ -127,5 +127,48 @@ describe("phoneFromWhatsAppLink", () => {
 
   it("returns null for non-WhatsApp links", () => {
     expect(phoneFromWhatsAppLink("https://instagram.com/business")).toBeNull();
+  });
+});
+
+describe("countryFromAddress", () => {
+  it("reads the country off the end of a formatted address", () => {
+    expect(countryFromAddress("12 Trans Amadi Rd, Port Harcourt, Rivers, Nigeria")?.iso).toBe("NG");
+    expect(countryFromAddress("12 Oxford Street, Osu, Accra, Ghana")?.iso).toBe("GH");
+    expect(countryFromAddress("45 Ngong Road, Nairobi, Kenya")?.iso).toBe("KE");
+  });
+
+  it("knows the names countries are actually written under", () => {
+    expect(countryFromAddress("221B Baker Street, London NW1 6XE, United Kingdom")?.iso).toBe("GB");
+    expect(countryFromAddress("500 Market St, San Francisco, CA 94105, USA")?.iso).toBe("US");
+  });
+
+  it("says nothing rather than guessing", () => {
+    expect(countryFromAddress("Somewhere with no country on the end")).toBeNull();
+    expect(countryFromAddress("")).toBeNull();
+    expect(countryFromAddress(undefined)).toBeNull();
+  });
+});
+
+describe("a number whose country is unknown", () => {
+  /*
+   * The whole point of removing the account-wide country. A scan covers
+   * several countries at once, so reading every local number as Nigerian
+   * silently corrupted the ones that were not.
+   */
+  it("is kept as found rather than read as the old default", () => {
+    expect(normalizePhone("0803 555 0101", null)).toBeNull();
+    expect(normalizePhone("024 123 4567", null)).toBeNull();
+  });
+
+  it("is still normalised when it carries its own dial code", () => {
+    expect(normalizePhone("+234 803 555 0101", null)).toBe("+2348035550101");
+    expect(normalizePhone("+233 24 123 4567", null)).toBe("+233241234567");
+  });
+
+  it("is read correctly once the address says where it is", () => {
+    const gh = countryFromAddress("12 Oxford Street, Osu, Accra, Ghana");
+    expect(normalizePhone("024 123 4567", gh?.iso ?? null)).toBe("+233241234567");
+    const ng = countryFromAddress("12 Trans Amadi Rd, Port Harcourt, Nigeria");
+    expect(normalizePhone("0803 555 0101", ng?.iso ?? null)).toBe("+2348035550101");
   });
 });

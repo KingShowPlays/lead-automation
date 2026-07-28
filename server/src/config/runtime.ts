@@ -168,6 +168,14 @@ export interface ResolvedEmail {
   zoho: { host: string; port: number; secure: boolean; user: string; password: string };
   resend: { apiKey: string };
   source: "db" | "env" | "none";
+  /**
+   * Why sending is not available, in the operator's terms.
+   *
+   * "Email is not configured" is true and useless. Knowing that Zoho has a
+   * password but no username, or that Resend has a key but nowhere to send
+   * from, is the difference between a fix and a guess.
+   */
+  missing: string[];
 }
 
 const NONE_EMAIL: ResolvedEmail = {
@@ -180,6 +188,7 @@ const NONE_EMAIL: ResolvedEmail = {
   zoho: { host: "smtp.zoho.com", port: 465, secure: true, user: "", password: "" },
   resend: { apiKey: "" },
   source: "none",
+  missing: [],
 };
 
 export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail {
@@ -192,10 +201,19 @@ export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail 
     clientSecret: email?.gmail?.clientSecret?.trim() || config.GMAIL_CLIENT_SECRET,
     refreshToken: email?.gmail?.refreshToken?.trim() || config.GMAIL_REFRESH_TOKEN,
   };
+  const zohoPort = email?.zoho?.port || Number(process.env.ZOHO_SMTP_PORT) || 465;
   const zoho = {
     host: email?.zoho?.host?.trim() || process.env.ZOHO_SMTP_HOST?.trim() || "smtp.zoho.com",
-    port: email?.zoho?.port || Number(process.env.ZOHO_SMTP_PORT) || 465,
-    secure: email?.zoho?.secure ?? true,
+    port: zohoPort,
+    /*
+     * Implicit TLS on 465, STARTTLS on everything else.
+     *
+     * These two have to agree, and getting them wrong does not produce a clear
+     * error: an SMTP client speaking TLS to a plaintext port hangs until the
+     * socket times out. The port says which one is meant, so it decides, and
+     * an explicit choice is only honoured where it is not a contradiction.
+     */
+    secure: zohoPort === 465 ? true : zohoPort === 587 || zohoPort === 25 ? false : (email?.zoho?.secure ?? true),
     user: email?.zoho?.user?.trim() || process.env.ZOHO_SMTP_USER?.trim() || "",
     password: email?.zoho?.password?.trim() || process.env.ZOHO_SMTP_PASSWORD?.trim() || "",
   };
@@ -206,6 +224,26 @@ export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail 
   const gmailReady = Boolean(gmail.clientId && gmail.clientSecret && gmail.refreshToken);
   const zohoReady = Boolean(zoho.user && zoho.password);
   const resendReady = Boolean(resend.apiKey);
+
+  /** Exactly what each provider still needs, named the way the form names it. */
+  const shortfall = (p: Exclude<ResolvedEmailProvider, "none">, from: string): string[] => {
+    const gaps: string[] = [];
+    if (p === "gmail") {
+      if (!gmail.clientId) gaps.push("Gmail client ID");
+      if (!gmail.clientSecret) gaps.push("Gmail client secret");
+      if (!gmail.refreshToken) gaps.push("Gmail refresh token");
+    }
+    if (p === "zoho") {
+      if (!zoho.user) gaps.push("SMTP username");
+      if (!zoho.password) gaps.push("SMTP password");
+      if (!zoho.host) gaps.push("SMTP host");
+    }
+    if (p === "resend") {
+      if (!resend.apiKey) gaps.push("Resend API key");
+    }
+    if (!from) gaps.push("from address");
+    return gaps;
+  };
 
   const fromFor = (p: ResolvedEmailProvider): string => {
     const explicit = email?.fromAddress?.trim();
@@ -221,7 +259,7 @@ export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail 
       (p === "gmail" && gmailReady && Boolean(fromAddress)) ||
       (p === "zoho" && zohoReady && Boolean(fromAddress)) ||
       (p === "resend" && resendReady && Boolean(fromAddress));
-    if (!ready) return NONE_EMAIL;
+    if (!ready) return { ...NONE_EMAIL, missing: shortfall(p, fromAddress) };
     const dbDriven = Boolean(
       email?.fromAddress?.trim() ||
         (p === "gmail" && email?.gmail?.clientId) ||
@@ -238,6 +276,7 @@ export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail 
       zoho,
       resend,
       source: dbDriven ? "db" : "env",
+      missing: [],
     };
   };
 
@@ -252,10 +291,26 @@ export function resolveEmail(integrations?: IntegrationSettings): ResolvedEmail 
       return build("resend");
     case "AUTO":
     default: {
-      if (gmailReady) return build("gmail");
-      if (zohoReady) return build("zoho");
-      if (resendReady) return build("resend");
-      return NONE_EMAIL;
+      /*
+       * Try each in turn, and keep going when one does not work out.
+       *
+       * This used to return the first provider whose credentials were present.
+       * Credentials are not enough, though: a provider with no from address
+       * cannot send, so Gmail credentials without a sender address made Auto
+       * give up while a perfectly configured Zoho sat next to it unused.
+       */
+      const attempts: Array<Exclude<ResolvedEmailProvider, "none">> = [];
+      if (gmailReady) attempts.push("gmail");
+      if (zohoReady) attempts.push("zoho");
+      if (resendReady) attempts.push("resend");
+
+      const gaps: string[] = [];
+      for (const candidate of attempts) {
+        const built = build(candidate);
+        if (built.configured) return built;
+        gaps.push(`${candidate}: ${built.missing.join(", ")}`);
+      }
+      return { ...NONE_EMAIL, missing: gaps };
     }
   }
 }

@@ -106,7 +106,6 @@ export interface SettingsDocument extends Document {
    * ISO-2 country the searches run in. Only ever a default for reading a phone
    * number written without a country code; a number that carries one keeps it.
    */
-  defaultCountry: string;
   /** Set once the first-run onboarding wizard is completed. */
   onboardedAt: Date | null;
   updatedAt: Date;
@@ -208,7 +207,6 @@ const settingsSchema = new Schema<SettingsDocument>(
     pitch: {
       reuseAcrossSimilarLeads: { type: Boolean, default: true },
     },
-    defaultCountry: { type: String, default: "NG", uppercase: true, trim: true },
     onboardedAt: { type: Date, default: null },
   },
   { timestamps: true },

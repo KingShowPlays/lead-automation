@@ -11,7 +11,7 @@ import { scoreLead } from "../services/scoring/leadScore.js";
 import { optOutLead } from "../services/suppression.js";
 import { createDraftForLead, emailsSentToday, getActiveEmail, sendPitchForLead } from "../services/outreach/email/index.js";
 import { assignChannel } from "../services/outreach/channel.js";
-import { normalizePhone } from "../utils/phone.js";
+import { countryFromAddress, normalizePhone } from "../utils/phone.js";
 
 export const leadsRouter = Router();
 
@@ -239,7 +239,11 @@ leadsRouter.patch(
     Object.assign(lead, body);
 
     if (body.phone !== undefined) {
-      lead.phoneNormalized = normalizePhone(body.phone, (await getSettings()).defaultCountry) ?? undefined;
+      // Read against the business's own address, not an account-wide default.
+      // A number that says nothing about its country in a lead whose country
+      // cannot be told is kept exactly as it was typed.
+      const country = countryFromAddress(lead.address)?.iso ?? null;
+      lead.phoneNormalized = normalizePhone(body.phone, country) ?? undefined;
     }
     if (body.instagramUsername) {
       lead.instagramUrl = `https://instagram.com/${body.instagramUsername.replace(/^@/, "")}`;

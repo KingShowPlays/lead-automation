@@ -22,7 +22,6 @@ import {
   RiDeleteBinLine,
 } from "react-icons/ri";
 import { api } from "@/lib/api";
-import { COUNTRIES } from "@/lib/contacts";
 import type { Settings, TestResult } from "@/lib/types";
 
 const NEED_WEIGHT_LABELS: Record<string, string> = {
@@ -158,7 +157,6 @@ export default function SettingsPage() {
         discoveryEnabled: settings.discoveryEnabled,
         maxResultsPerQuery: settings.maxResultsPerQuery,
         placesRequestsPerMinute: settings.placesRequestsPerMinute,
-        defaultCountry: settings.defaultCountry ?? "NG",
         pitch: settings.pitch ?? { reuseAcrossSimilarLeads: true },
         integrations: settings.integrations,
       });
@@ -231,15 +229,10 @@ export default function SettingsPage() {
           />
           <TestButton label="Test Places" run={api.testPlaces} beforeTest={save} />
 
-          <SelectField
-            label="Country these searches run in"
-            value={settings.defaultCountry ?? "NG"}
-            options={COUNTRIES.map((c) => ({ value: c.iso, label: `${c.name} (+${c.dial})` }))}
-            onChange={(v) => upd({ defaultCountry: v })}
-          />
-          <p className="-mt-2 text-xs leading-relaxed text-slate-400">
-            Only used to read a phone number written without a country code. A number that carries its own country code
-            keeps it, whatever this is set to.
+          <p className="text-xs leading-relaxed text-slate-400">
+            Cities can be anywhere. Each business's country is read from its own address, so one scan can cover several
+            at once. A number that carries its own country code keeps it, and one that does not, in a place whose
+            country cannot be told, is shown exactly as it was found rather than guessed at.
           </p>
 
           <TagEditor
