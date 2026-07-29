@@ -107,8 +107,8 @@ Rules:
 - Do NOT invent facts, prices, or statistics. Do NOT claim you visited the business.
 - Close formally: "Kind regards," on its own line, then "The YEAN Technologies team".
 
-Respond with ONLY valid JSON, no markdown fences:
-{"observation": "<the one-sentence personalised observation you opened with>", "subject": "<email subject line, max 9 words, specific not clickbait>", "message": "<the full message body>"}`;
+Respond with ONLY valid JSON, no markdown fences. Write every line break inside the message as \\n, never as an actual newline, or the JSON will be invalid:
+{"observation": "<the one-sentence personalised observation you opened with>", "subject": "<email subject line, max 9 words, specific not clickbait>", "message": "<the full message body, with \\n\\n between paragraphs>"}`;
 }
 
 interface AiCallResult {
@@ -283,13 +283,87 @@ export function sanitizeProse(text: string): string {
     .replace(/ {2,}/g, " ");
 }
 
+/**
+ * Escapes the control characters models leave loose inside JSON strings.
+ *
+ * A letter has paragraphs in it, and a model asked for JSON very often writes
+ * those as real newlines rather than as \n. That is invalid JSON, and strict
+ * parsing rejected the whole response: "Bad control character in string literal
+ * at position 172" is the first blank line of the message. Every pitch then
+ * silently fell back to the template while the provider was answering perfectly.
+ *
+ * Only characters inside string literals are touched, so the structure of the
+ * object is left exactly as the model wrote it.
+ */
+export function escapeLooseControlCharacters(json: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+
+  for (const char of json) {
+    if (escaped) {
+      out += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      out += char;
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      out += char;
+      continue;
+    }
+    // Anything below U+0020 is illegal unescaped inside a JSON string. The
+    // three that carry meaning are escaped; the rest are noise and dropped.
+    if (inString && char.charCodeAt(0) < 0x20) {
+      out += char === "\n" ? "\\n" : char === "\r" ? "\\r" : char === "\t" ? "\\t" : "";
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
+/** Last resort: lift the fields out directly when the object will not parse. */
+function fieldsByHand(json: string): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const key of ["observation", "subject", "message"]) {
+    // Everything up to the quote that closes the value, which is the one
+    // followed by a comma or the end of the object.
+    const match = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,\\s*"|\\}\\s*$)`).exec(json);
+    if (match) found[key] = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  }
+  return found;
+}
+
 export function parsePitchJson(text: string): { observation: string; subject: string; message: string } {
   // Strip accidental markdown fences, then find the JSON object.
   const cleaned = text.replace(/```(?:json)?/g, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) throw new Error("No JSON object in AI response");
-  const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  const body = cleaned.slice(start, end + 1);
+
+  /*
+   * Three attempts, cheapest first. Throwing away a written pitch over
+   * punctuation is worse than any of the tolerance below: the model did the
+   * work and the operator gets a template instead.
+   */
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(body) as Record<string, unknown>;
+  } catch {
+    try {
+      parsed = JSON.parse(escapeLooseControlCharacters(body)) as Record<string, unknown>;
+    } catch {
+      parsed = fieldsByHand(body);
+      if (!parsed.subject || !parsed.message) throw new Error("AI response was not usable JSON");
+    }
+  }
+
   const observation = sanitizeProse(String(parsed.observation ?? "").trim());
   const subject = sanitizeProse(String(parsed.subject ?? "").trim());
   const message = sanitizeProse(String(parsed.message ?? "").trim());

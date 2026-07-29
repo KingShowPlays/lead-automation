@@ -146,3 +146,47 @@ describe("applyPitchResult", () => {
     expect(lead.pitchFallbackReason).toBe("provider unavailable");
   });
 });
+
+describe("parsing what models actually return", () => {
+  /*
+   * The reported failure. Asked for JSON, models very often write the letter's
+   * paragraph breaks as real newlines instead of \n, which is invalid JSON.
+   * Strict parsing threw "Bad control character in string literal at position
+   * 172", the position of the first blank line, and every pitch fell back to
+   * the template while the provider was answering perfectly.
+   */
+  it("accepts raw newlines inside the message, which is what broke every pitch", () => {
+    const raw =
+      '{"observation": "We noticed you have no website.", "subject": "A website for Mayorall goods", ' +
+      '"message": "Hello Mayorall goods,\n\nWe came across your shop while researching companies in Lagos.\n\nKind regards,\nThe YEAN Technologies team"}';
+
+    expect(() => JSON.parse(raw)).toThrow(); // the payload really is invalid JSON
+
+    const parsed = parsePitchJson(raw);
+    expect(parsed.subject).toBe("A website for Mayorall goods");
+    expect(parsed.message.startsWith("Hello Mayorall goods,")).toBe(true);
+    // The paragraph breaks are the point of the message; they must survive.
+    expect(parsed.message).toContain("\n\n");
+    expect(parsed.message).toContain("The YEAN Technologies team");
+  });
+
+  it("still handles tabs and carriage returns", () => {
+    const raw = '{"subject": "S", "message": "One\r\n\tTwo"}';
+    expect(parsePitchJson(raw).message).toContain("Two");
+  });
+
+  it("leaves properly escaped responses exactly as they are", () => {
+    const raw = '{"observation": "o", "subject": "S", "message": "Hello,\\n\\nBody."}';
+    expect(parsePitchJson(raw).message).toBe("Hello,\n\nBody.");
+  });
+
+  it("survives markdown fences around the object", () => {
+    const raw = '```json\n{"subject": "S", "message": "Hello,\n\nBody."}\n```';
+    expect(parsePitchJson(raw).subject).toBe("S");
+  });
+
+  it("still refuses a response with nothing usable in it", () => {
+    expect(() => parsePitchJson("I cannot help with that.")).toThrow();
+    expect(() => parsePitchJson('{"subject": "S"}')).toThrow();
+  });
+});
