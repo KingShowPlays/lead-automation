@@ -46,7 +46,28 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   }
 
-  const body = await res.json().catch(() => ({}));
+  /*
+   * An unreadable body is an error, not an empty object.
+   *
+   * This used to fall back to `{}` and hand it back cast as the expected type,
+   * so a gateway answering 200 with an HTML error page produced a result whose
+   * every field was undefined. Nothing failed at the call site; the crash
+   * surfaced much later and somewhere else, as `undefined is not an object` on
+   * a count the view was rendering, which takes the whole page down.
+   *
+   * Failures keep the lenient reading, because an error response is allowed to
+   * carry no body and the status is the useful part anyway.
+   */
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    if (res.ok) {
+      throw new ApiError(res.status, `The server sent a response this page could not read (${res.status}).`);
+    }
+    body = {};
+  }
+
   if (!res.ok) {
     throw new ApiError(res.status, (body as { error?: string }).error ?? `Request failed (${res.status})`);
   }

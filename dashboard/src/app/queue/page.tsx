@@ -81,13 +81,22 @@ export default function QueuePage() {
       })
       .then((result: { items: Lead[]; total: number }) => {
         if (cancelled) return;
-        cached.current.set(channel, { items: result.items, total: result.total });
-        setLeads(result.items);
-        setTotal(result.total);
+        /*
+         * Read defensively. A payload that arrives without its envelope, from
+         * a proxy that answered but did not pass the body through, used to put
+         * undefined into `total` and take the whole page down on the next
+         * render. A queue with a wrong count is recoverable; a blank screen is
+         * not.
+         */
+        const items = Array.isArray(result?.items) ? result.items : [];
+        const count = Number.isFinite(result?.total) ? result.total : items.length;
+        cached.current.set(channel, { items, total: count });
+        setLeads(items);
+        setTotal(count);
         setError(null);
         // The first lead opens so the page is useful on arrival; the rest stay
         // shut so a queue of five hundred is scannable.
-        setExpanded((current) => (current.size === 0 && result.items[0] ? new Set([result.items[0]._id]) : current));
+        setExpanded((current) => (current.size === 0 && items[0] ? new Set([items[0]._id]) : current));
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
