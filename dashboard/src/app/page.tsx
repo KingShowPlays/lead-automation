@@ -424,17 +424,20 @@ export default function OverviewPage() {
           <RiRadarLine className="h-5 w-5 text-purple-600" />
         </div>
         <RunBars runs={stats.recentRuns} />
-        <div className="mt-5 divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-          {stats.recentRuns.slice(0, 4).map((run) => (
-            <div key={run._id} className="flex items-center justify-between gap-3 py-3 text-xs">
-              <span className="text-slate-500 dark:text-slate-400">
-                {new Date(run.startedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
-              </span>
-              <span className="font-bold tabular-nums">+{run.totals.created} new</span>
-            </div>
-          ))}
-          {stats.recentRuns.length === 0 && <p className="py-6 text-center text-sm text-slate-400">No discovery runs yet.</p>}
-        </div>
+        {/* The chart already says so when there is nothing; a second empty
+            message under it just repeated itself. */}
+        {(stats.recentRuns ?? []).length > 0 && (
+          <div className="mt-5 divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {(stats.recentRuns ?? []).slice(0, 4).map((run) => (
+              <div key={run._id} className="flex items-center justify-between gap-3 py-3 text-xs">
+                <span className="text-slate-500 dark:text-slate-400">
+                  {new Date(run.startedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
+                </span>
+                <span className="font-bold tabular-nums">+{run.totals?.created ?? 0} new</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     ),
 
@@ -882,15 +885,60 @@ function MetricCard({
 }
 
 function RunBars({ runs }: { runs: Stats["recentRuns"] }) {
-  const data = [...runs].slice(0, 8).reverse();
-  const max = Math.max(...data.map((run) => run.totals.created), 1);
-  if (data.length === 0) return <div className="skeleton-block h-28" />;
+  // Defensive, like everywhere else that reads a payload: a missing array here
+  // used to throw on the spread and take the overview down with it.
+  const data = (Array.isArray(runs) ? [...runs] : []).slice(0, 8).reverse();
+
+  /*
+   * Nothing to plot is not the same as still loading.
+   *
+   * This returned a skeleton block, which is the grey placeholder the rest of
+   * the app uses to mean "the data is on its way". With no runs yet it never
+   * resolved, so the panel showed a large empty grey rectangle for good and
+   * read as broken rather than as empty.
+   */
+  if (data.length === 0) {
+    return (
+      <div className="flex h-28 items-center justify-center border border-dashed border-slate-300 px-4 text-center dark:border-slate-700">
+        <p className="text-xs leading-relaxed text-slate-400">
+          Run a scan and the leads it creates will be charted here.
+        </p>
+      </div>
+    );
+  }
+
+  const created = (run: Stats["recentRuns"][number]) => run.totals?.created ?? 0;
+  const max = Math.max(...data.map(created), 1);
+
   return (
-    <div className="flex h-28 items-end gap-2 border-b border-l border-slate-300 px-2 pt-2 dark:border-slate-700" aria-label="Recent discovery run lead creation chart">
+    /*
+     * The columns stretch, and each one is full height.
+     *
+     * They were laid out with `items-end`, which sizes a flex child to its
+     * content rather than to the row. The bars are sized as a percentage, and a
+     * percentage of an automatic height resolves to nothing, so every bar
+     * collapsed and the chart drew only its axes. It was invisible with data,
+     * not merely empty without it.
+     */
+    <div
+      className="flex h-28 items-stretch gap-2 border-b border-l border-slate-300 px-2 pt-2 dark:border-slate-700"
+      aria-label="Leads created by each of the most recent discovery runs"
+    >
       {data.map((run) => (
-        <div key={run._id} className="group flex min-w-0 flex-1 flex-col items-center justify-end">
-          <span className="mb-1 text-[10px] font-bold tabular-nums opacity-0 group-hover:opacity-100">{run.totals.created}</span>
-          <span className="w-full bg-purple-600" style={{ height: `${Math.max((run.totals.created / max) * 100, run.totals.created > 0 ? 6 : 2)}%` }} />
+        <div key={run._id} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+          {/*
+            Always shown, not only on hover. A number that requires a pointer is
+            a number nobody on a phone can read, and this is the whole content
+            of the chart.
+          */}
+          <span className="mb-1 text-[10px] font-bold tabular-nums text-slate-500 dark:text-slate-400">
+            {created(run)}
+          </span>
+          <span
+            className="w-full bg-purple-600"
+            style={{ height: `${Math.max((created(run) / max) * 100, created(run) > 0 ? 6 : 2)}%` }}
+            title={`${created(run)} new leads`}
+          />
         </div>
       ))}
     </div>
